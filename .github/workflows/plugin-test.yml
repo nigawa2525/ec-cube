@@ -100,7 +100,7 @@ jobs:
         run: mysql -h 127.0.0.1 -u root -ppassword eccube_db -e "update dtb_base_info set authentication_key='test';"
 
       - name: setup-chromedriver
-        uses: nanasess/setup-chromedriver@fc3dc5897c11410827ed268ab625038ee63dc6fe  # master
+        uses: nanasess/setup-chromedriver@5c1220e385aca82610aa6fc7cdf1429306d50f9d  # master
 
       - name: Run chromedriver
         run: |
@@ -252,7 +252,7 @@ jobs:
         run: mysql -h 127.0.0.1 -u root -ppassword eccube_db -e "update dtb_base_info set authentication_key='test';"
 
       - name: setup-chromedriver
-        uses: nanasess/setup-chromedriver@fc3dc5897c11410827ed268ab625038ee63dc6fe  # master
+        uses: nanasess/setup-chromedriver@5c1220e385aca82610aa6fc7cdf1429306d50f9d  # master
 
       - name: Run chromedriver
         run: |
@@ -404,7 +404,7 @@ jobs:
         run: mysql -h 127.0.0.1 -u root -ppassword eccube_db -e "update dtb_base_info set authentication_key='test';"
 
       - name: setup-chromedriver
-        uses: nanasess/setup-chromedriver@fc3dc5897c11410827ed268ab625038ee63dc6fe  # master
+        uses: nanasess/setup-chromedriver@5c1220e385aca82610aa6fc7cdf1429306d50f9d  # master
 
       - name: Run chromedriver
         run: |
@@ -559,7 +559,7 @@ jobs:
         run: mysql -h 127.0.0.1 -u root -ppassword eccube_db -e "update dtb_base_info set authentication_key='test';"
 
       - name: setup-chromedriver
-        uses: nanasess/setup-chromedriver@fc3dc5897c11410827ed268ab625038ee63dc6fe  # master
+        uses: nanasess/setup-chromedriver@5c1220e385aca82610aa6fc7cdf1429306d50f9d  # master
 
       - name: Run chromedriver
         run: |
