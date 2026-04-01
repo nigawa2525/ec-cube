@@ -139,7 +139,7 @@ jobs:
 
       - name: setup-chromedriver
         if: steps.chromedriver-cache.outputs.cache-hit != 'true'
-        uses: nanasess/setup-chromedriver@fc3dc5897c11410827ed268ab625038ee63dc6fe  # master
+        uses: nanasess/setup-chromedriver@5c1220e385aca82610aa6fc7cdf1429306d50f9d  # master
 
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # latest
