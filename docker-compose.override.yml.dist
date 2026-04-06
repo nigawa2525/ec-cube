@@ -1,0 +1,19 @@
+version: "3"
+
+# このファイルは docker compose が自動的に読み込みます。
+# ローカルで開発したプラグイン・テンプレートをDockerに自動反映するための設定です。
+#
+# 使い方:
+# cp docker-compose.override.yml.dist docker-compose.override.yml
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  ec-cube:
+    volumes:
+      # プラグイン開発用
+      - "./app/Plugin:/var/www/html/app/Plugin"
+      - "./html/plugin:/var/www/html/html/plugin"
+      # テンプレート開発用
+      - "./app/template:/var/www/html/app/template"
+      - "./html/template:/var/www/html/html/template"
+      - "./html/user_data:/var/www/html/html/user_data"
