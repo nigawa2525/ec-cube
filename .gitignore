@@ -51,3 +51,4 @@ node_modules
 /.php-cs-fixer.*.php
 ###< friendsofphp/php-cs-fixer ###
 screenshots/
+docker-compose.override.yml
