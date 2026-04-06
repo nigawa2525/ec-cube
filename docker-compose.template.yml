@@ -1,9 +1,11 @@
 version: "3"
 
-# ローカルで開発したプラグイン・テンプレートをDockerに自動反映するための設定です。
+# テンプレート開発用の設定です。
 #
 # 使い方:
-# docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.sync.yml up -d
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.template.yml up -d
+#
+# テンプレートを切り替える場合は ECCUBE_TEMPLATE_CODE を変更して docker compose restart を実行してください。
 
 services:
   ec-cube:
@@ -12,10 +14,6 @@ services:
       # 変更後は docker compose restart が必要です。
       ECCUBE_TEMPLATE_CODE: "${ECCUBE_TEMPLATE_CODE:-default}"
     volumes:
-      # プラグイン開発用
-      - "./app/Plugin:/var/www/html/app/Plugin"
-      - "./html/plugin:/var/www/html/html/plugin"
-      # テンプレート開発用
       - "./app/template:/var/www/html/app/template"
       - "./html/template:/var/www/html/html/template"
       - "./html/user_data:/var/www/html/html/user_data"
