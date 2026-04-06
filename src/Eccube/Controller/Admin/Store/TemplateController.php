@@ -92,9 +92,9 @@ class TemplateController extends AbstractController
 
             $this->addSuccess('admin.common.save_complete', 'admin');
 
-            // 環境変数 ECCUBE_TEMPLATE_CODE がプロセス環境（Dockerなど）で設定されている場合、
-            // .env への書き込みは反映されないため警告を表示する。
-            if (false !== getenv('ECCUBE_TEMPLATE_CODE')) {
+            // APP_ENV が環境変数として設定されている場合、index.php は .env を読み込まない。
+            // そのため .env への書き込みは反映されないため警告を表示する。
+            if (isset($_SERVER['APP_ENV'])) {
                 $this->addWarning('admin.store.template.env_override_warning', 'admin');
             }
 
