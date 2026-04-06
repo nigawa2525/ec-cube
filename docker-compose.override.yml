@@ -5,6 +5,10 @@ version: "3"
 
 services:
   ec-cube:
+    environment:
+      # 使用するテンプレートコードを指定します。
+      # 変更後は docker compose restart が必要です。
+      ECCUBE_TEMPLATE_CODE: "${ECCUBE_TEMPLATE_CODE:-default}"
     volumes:
       # プラグイン開発用
       - "./app/Plugin:/var/www/html/app/Plugin"
