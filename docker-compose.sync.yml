@@ -1,7 +1,9 @@
 version: "3"
 
-# このファイルは docker compose が自動的に読み込みます。
 # ローカルで開発したプラグイン・テンプレートをDockerに自動反映するための設定です。
+#
+# 使い方:
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.sync.yml up -d
 
 services:
   ec-cube:
