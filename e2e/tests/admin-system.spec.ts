@@ -371,6 +371,56 @@ test.describe('Admin System Info (EA08)', () => {
     await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました');
   });
 
+  test('systeminfo_log_display - EA0806-UC02-T01', async ({ page }) => {
+    await page.goto(`/${adminRoute}/setting/system/log`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('ログ表示');
+
+    // Verify the log page has the expected form elements
+    await expect(page.locator('#admin_system_log_files')).toBeVisible();
+    await expect(page.locator('#admin_system_log_line_max')).toBeVisible();
+    await expect(page.getByRole('button', { name: '読み込む' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ダウンロード' })).toBeVisible();
+
+    // Verify a log file is available in the select
+    const firstOption = await page.locator('#admin_system_log_files option:nth-child(1)').textContent();
+    expect(firstOption!.trim().length).toBeGreaterThan(0);
+    expect(firstOption).toMatch(/\.log$/);
+
+    // Verify the log viewer area exists
+    await expect(page.locator('.c-contentsArea .log-viewer')).toBeVisible();
+  });
+
+  test('systeminfo_member_self_delete_protection - EA0802-UC01-T07', async ({ page }) => {
+    await page.goto(`/${adminRoute}/setting/system/member`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('メンバー管理');
+
+    // The currently logged-in admin should not be able to delete themselves.
+    // The delete button for the logged-in user should have an empty href (disabled).
+    const rows = await page.locator('.c-primaryCol .card-body table tbody tr').count();
+    expect(rows).toBeGreaterThanOrEqual(1);
+
+    // Find the row for the logged-in admin (管理者) - check each row's delete button
+    let foundSelfProtection = false;
+    for (let i = 1; i <= rows; i++) {
+      const deleteBtn = page.locator(`.c-primaryCol .card-body table tbody tr:nth-child(${i}) td:nth-child(6) .action-delete`);
+      if (await deleteBtn.count() > 0) {
+        const href = await deleteBtn.getAttribute('href');
+        if (href === '' || href === null) {
+          // This is the self-delete protected row
+          foundSelfProtection = true;
+          break;
+        }
+      } else {
+        // No delete button at all means it's self-protected
+        foundSelfProtection = true;
+        break;
+      }
+    }
+    expect(foundSelfProtection).toBe(true);
+  });
+
   test('systeminfo_login_history - EA0808-UC01-T01', async ({ page }) => {
     // Search for 'admin' login history
     await page.goto(`/${adminRoute}/setting/system/login_history`);

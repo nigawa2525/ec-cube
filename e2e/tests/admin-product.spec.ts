@@ -621,4 +621,160 @@ test.describe('Admin Product (EA03)', () => {
     ]);
     expect(download.suggestedFilename()).toBe('class_category.csv');
   });
+
+  test('product_商品の複製', async ({ page }) => {
+    // Search for a product with classes (e.g., 彩のジェラートCUBE)
+    await goProductList(page);
+    await searchProduct(page, '彩のジェラートCUBE');
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：1件が該当しました');
+
+    // Click the copy (複製) button on first row - opens a confirmation modal
+    await page.locator('#form_bulk table tbody tr:first-child td.align-middle.pe-3 div div:nth-child(2) a[data-bs-toggle="modal"]').click();
+    await page.waitForTimeout(500);
+
+    // Confirm the modal by clicking the 複製 link
+    await page.locator('.modal.show a.btn-ec-conversion').click();
+    await page.waitForLoadState('load');
+
+    // Verify success message on the product edit page
+    await expect(page.locator('.alert-success')).toContainText('商品を複製しました');
+  });
+
+  test('product_一覧からの規格編集規格なし失敗', async ({ page }) => {
+    // Search for 規格なし商品
+    await goProductList(page);
+    await searchProduct(page, '規格なし商品');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click on product name to go to edit page
+    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品登録');
+
+    // Click 規格管理 link (navigates to class edit page)
+    await page.locator('#standardConfig a[href*="product/class"]').click();
+    // A confirmation modal appears: save before navigating?
+    await page.waitForTimeout(500);
+    const confirmModal = page.locator('#confirmFormChangeModal');
+    if (await confirmModal.isVisible()) {
+      await confirmModal.locator('a.btn-ec-conversion').click();
+    }
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品規格登録');
+
+    // Try to set class without selecting anything (submit empty)
+    await page.locator('div.c-contentsArea form button[type="submit"]').click();
+    await page.waitForTimeout(500);
+
+    // Verify the class name 1 select is invalid (HTML5 required validation)
+    const isInvalid = await page.locator('#product_class_matrix_class_name1').evaluate(
+      (el: HTMLSelectElement) => !el.checkValidity()
+    );
+    expect(isInvalid).toBeTruthy();
+
+    // The class table should not be visible (no class rows displayed)
+    await expect(page.locator('#page_admin_product_product_class table')).not.toBeVisible();
+  });
+
+  test('product_一覧からの規格編集規格なし_', async ({ page }) => {
+    // Search for 規格なし商品
+    await goProductList(page);
+    await searchProduct(page, '規格なし商品');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click on product name to go to edit page
+    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品登録');
+
+    // Click 規格管理 link
+    await page.locator('#standardConfig a[href*="product/class"]').click();
+    await page.waitForTimeout(500);
+    const confirmModal = page.locator('#confirmFormChangeModal');
+    if (await confirmModal.isVisible()) {
+      await confirmModal.locator('a.btn-ec-conversion').click();
+    }
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品規格登録');
+
+    // Select class name 1 = フレーバー (label includes extra text like "フレーバー (CUBE用味)")
+    const className1Select = page.locator('#product_class_matrix_class_name1');
+    const options = await className1Select.locator('option').all();
+    for (const option of options) {
+      const text = await option.textContent();
+      if (text && text.includes('フレーバー')) {
+        const value = await option.getAttribute('value');
+        if (value) {
+          await className1Select.selectOption(value);
+          break;
+        }
+      }
+    }
+
+    // Submit class setting
+    await page.locator('div.c-contentsArea form button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // Verify combinations are shown (e.g., "3件の組み合わせがあります")
+    await expect(page.locator('div.c-contentsArea')).toContainText(/\d+件の組み合わせがあります/);
+
+    // Select and fill each class row with stock unlimited and price
+    const rowCount = await page.locator('table tbody tr').count();
+    for (let i = 0; i < Math.min(rowCount, 3); i++) {
+      // Check the "checked" checkbox
+      await page.locator(`#product_class_matrix_product_classes_${i}_checked`).check();
+      // Check stock unlimited
+      await page.locator(`#product_class_matrix_product_classes_${i}_stock_unlimited`).check();
+      // Fill sale price
+      await page.locator(`#product_class_matrix_product_classes_${i}_price02`).fill('1000');
+    }
+
+    // Click save button
+    await page.locator('button[name="product_class_matrix[save]"]').click();
+    await page.waitForLoadState('load');
+
+    // Verify success
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+  });
+
+  test('product_商品の一括削除_正常', async ({ page }) => {
+    // Use a fixed timestamp prefix for all 5 products
+    const timestamp = Date.now();
+    const prefix = `一括削除用_${timestamp}`;
+    for (let i = 1; i <= 5; i++) {
+      const name = `${prefix}_${i}`;
+      await page.goto(`/${adminRoute}/product/product/new`);
+      await page.waitForLoadState('load');
+      await page.locator('#admin_product_name').fill(name);
+      await page.locator('#admin_product_class_price02').fill('1000');
+      await page.locator('button.ladda-button[type="submit"]').click();
+      await page.waitForLoadState('load');
+      await expect(page.locator('.alert-success')).toContainText('保存しました');
+    }
+
+    // Search for the bulk delete products using common prefix
+    await goProductList(page);
+    await searchProduct(page, prefix);
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：5件が該当しました');
+
+    // Select all
+    await page.locator('#trigger_check_all').check();
+
+    // Click delete button
+    await page.locator('#form_bulk button.btn-ec-delete').click();
+    await page.waitForSelector('#bulkDelete', { state: 'visible' });
+
+    // Confirm delete
+    await page.locator('#bulkDelete').click();
+
+    // Wait for delete to complete
+    await page.waitForSelector('#bulkDeleteDone', { state: 'visible', timeout: 30_000 });
+
+    // Click done
+    await page.locator('#bulkDeleteDone').click();
+    await page.waitForLoadState('load');
+
+    // Verify 0 results
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：0件が該当しました');
+  });
 });

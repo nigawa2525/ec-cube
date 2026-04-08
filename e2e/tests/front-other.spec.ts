@@ -1,6 +1,61 @@
 import { test, expect } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
+
+const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
+
+/**
+ * Helper: get an active customer email from admin storage state.
+ * Uses the saved admin auth to query the customer edit page.
+ */
+async function getActiveCustomerEmail(page: import('@playwright/test').Page): Promise<string> {
+  // Load admin auth state to create an authenticated request context
+  const authFile = path.join(__dirname, '..', '.auth', 'admin.json');
+  const storageState = JSON.parse(fs.readFileSync(authFile, 'utf-8'));
+
+  // Use a new context with admin auth to fetch customer email
+  const browser = page.context().browser()!;
+  const adminContext = await browser.newContext({ storageState });
+  const adminPage = await adminContext.newPage();
+
+  await adminPage.goto(`/${adminRoute}/customer/1/edit`);
+  await adminPage.waitForLoadState('load');
+  const email = await adminPage.locator('#admin_customer_email').inputValue();
+
+  await adminContext.close();
+  return email;
+}
 
 test.describe('Front Other Pages (EF06)', () => {
+
+  test('EF0601-UC01-T01 ログイン・ログアウト', async ({ page }) => {
+    // Get an active customer email
+    const email = await getActiveCustomerEmail(page);
+
+    // Login
+    await page.goto('/mypage/login');
+    await page.waitForLoadState('load');
+
+    await page.locator('input[name="login_email"]').fill(email);
+    await page.locator('input[name="login_pass"]').fill('password');
+    await page.locator('#login_mypage button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // After login, user is redirected (to top or mypage)
+    // Navigate to mypage to verify logged-in state
+    await page.goto('/mypage');
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-pageHeader h1')).toContainText('マイページ');
+
+    // Logout
+    await page.locator('a[href*="/logout"]').first().click();
+    await page.waitForLoadState('load');
+
+    // Verify logged out - navigating to mypage should redirect to login
+    await page.goto('/mypage');
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-pageHeader h1')).toContainText('ログイン');
+  });
 
   test('EF0604-UC01-T01 当サイトについて', async ({ page }) => {
     await page.goto('/help/about');

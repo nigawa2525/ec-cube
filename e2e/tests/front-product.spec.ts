@@ -156,6 +156,66 @@ test.describe('Front Product (EF02)', () => {
     await page.waitForLoadState('load');
   });
 
+  test('EF0202-UC02-T01_simple 商品詳細 カートに入れる(規格なし)', async ({ page }) => {
+    // Product ID 2 = チェリーアイスサンド (no product classes / 規格なし)
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+
+    await expect(page.locator('.ec-headingTitle')).toContainText('チェリーアイスサンド');
+
+    // Set quantity to 1 and add to cart
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+
+    // Modal appears
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('カートに追加しました');
+
+    // Go to cart
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // Verify cart page
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('ショッピングカート');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('チェリーアイスサンド');
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('1');
+
+    // Clean up - delete from cart
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+  });
+
+  test('EF0202-UC02-T01_quantity 商品詳細 数量変更してカートに入れる', async ({ page }) => {
+    // Product ID 2 = チェリーアイスサンド (no product classes / 規格なし)
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+
+    await expect(page.locator('.ec-headingTitle')).toContainText('チェリーアイスサンド');
+
+    // Set quantity to 3 and add to cart
+    await page.locator('#quantity').fill('3');
+    await page.locator('.add-cart').click();
+
+    // Modal appears
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('カートに追加しました');
+
+    // Go to cart
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // Verify cart page shows quantity 3
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('ショッピングカート');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('チェリーアイスサンド');
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('3');
+
+    // Clean up - delete from cart
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+  });
+
   test('EF0202-UC02-T01 商品詳細 カート追加と削除', async ({ page }) => {
     await page.goto('/products/detail/1');
     await page.waitForLoadState('load');

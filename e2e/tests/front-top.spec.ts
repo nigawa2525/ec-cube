@@ -34,6 +34,31 @@ test.describe('Front Top Page (EF01)', () => {
     await expect(page.locator('.ec-newsRole')).toBeVisible();
   });
 
+  test('EF0101-UC01-T02 TOPページ 新着情報', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('load');
+
+    // Check if news items exist
+    const newsItems = page.locator('.ec-newsRole__newsItem');
+    const newsCount = await newsItems.count();
+
+    if (newsCount > 0) {
+      // Click the first news heading to expand it
+      const firstHeading = page.locator('.ec-newsRole__newsHeading').first();
+      await firstHeading.click();
+      await page.waitForTimeout(500);
+
+      // Verify that the description expands and is visible
+      const description = page.locator('.ec-newsRole__newsDescription').first();
+      await expect(description).toBeVisible();
+
+      // Verify description has content
+      const descText = await description.textContent();
+      expect(descText!.trim().length).toBeGreaterThan(0);
+    }
+    // If no news exists, skip gracefully (test still passes)
+  });
+
   test('EF0101-UC02-T01 TOPページ カテゴリ検索', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('load');

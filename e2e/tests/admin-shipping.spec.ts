@@ -23,6 +23,46 @@ test.describe('Admin Shipping (EA09)', () => {
     expect(filePath).toBeTruthy();
   });
 
+  test('shipping_edit - EA0901-UC03-T01', async ({ page }) => {
+    // Navigate to order list and search for all orders
+    await page.goto(`/${adminRoute}/order`);
+    await page.waitForLoadState('load');
+    await page.locator('#search_form .c-outsideBlock__contents button').first().click();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(1000);
+
+    // Get the first order's edit link
+    const firstOrderLink = page.locator('table tbody td a[href*="/order/"]').first();
+    await expect(firstOrderLink).toBeVisible();
+    const orderEditHref = await firstOrderLink.getAttribute('href');
+
+    // Navigate to order edit page
+    await page.goto(orderEditHref!);
+    await page.waitForLoadState('load');
+
+    // Find the shipping edit link
+    const shippingEditLink = page.locator('a[href*="/shipping/"][href*="/edit"]');
+    await expect(shippingEditLink).toBeVisible();
+    const shippingEditHref = await shippingEditLink.getAttribute('href');
+
+    // Navigate to shipping edit page
+    await page.goto(shippingEditHref!);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('出荷登録');
+
+    // Edit tracking number
+    const trackingNumber = 'TEST-TRACK-' + Date.now();
+    await page.locator('#form_shippings_0_tracking_number').fill(trackingNumber);
+
+    // Submit
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました', { timeout: 30_000 });
+
+    // Verify the tracking number was saved
+    await expect(page.locator('#form_shippings_0_tracking_number')).toHaveValue(trackingNumber);
+  });
+
   test('shipping_csv_upload_page_display - EA0903-UC04', async ({ page }) => {
     // Verify the shipping CSV upload page is accessible and has correct elements
     await page.goto(`/${adminRoute}/order/shipping_csv_upload`);

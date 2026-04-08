@@ -303,6 +303,110 @@ test.describe('Admin Basic Info (EA07)', () => {
     await expect(page.locator('#form_OrderStatuses_0_name')).toHaveValue('新規受付');
   });
 
+  test('basicinfo_tradelaw_settings - EA0702-UC01-T01', async ({ page }) => {
+    // Navigate to trade law settings page
+    await page.goto(`/${adminRoute}/setting/shop/tradelaw`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('特定商取引法設定');
+
+    // Fill in trade law entries (index 0 = 販売業者, 1 = 代表責任者, etc.)
+    const entries = [
+      { index: 0, name: '販売業者名称', desc: '販売業者説明' },
+      { index: 1, name: '代表責任者名称', desc: '代表責任者説明' },
+      { index: 2, name: '所在地名称', desc: '所在地説明' },
+      { index: 3, name: '電話番号名称', desc: '電話番号説明' },
+      { index: 4, name: 'メールアドレス名称', desc: 'メールアドレス説明' },
+      { index: 5, name: 'URL名称', desc: 'URL説明' },
+    ];
+    for (const e of entries) {
+      await page.locator(`#form_TradeLaws_${e.index}_name`).fill(e.name);
+      await page.locator(`#form_TradeLaws_${e.index}_description`).fill(e.desc);
+    }
+
+    // Save
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました', { timeout: 30_000 });
+
+    // Verify on the front tradelaw page
+    await page.goto('/help/tradelaw');
+    await page.waitForLoadState('load');
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('特定商取引法に基づく表記');
+
+    // Check that entries appear in dl elements
+    const defs = page.locator('.ec-borderedDefs dl');
+    await expect(defs.first()).toBeVisible();
+    await expect(page.locator('.ec-borderedDefs')).toContainText('販売業者名称');
+    await expect(page.locator('.ec-borderedDefs')).toContainText('販売業者説明');
+  });
+
+  test('basicinfo_agreement_settings - EA0703-UC01-T01', async ({ page }) => {
+    // Navigate directly to the agreement page edit
+    // Page ID 19 is the standard 利用規約 page
+    await page.goto(`/${adminRoute}/content/page/19/edit`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('ページ管理');
+
+    // Get current content from the hidden textarea
+    const currentContent = await page.locator('#main_edit_tpl_data').inputValue();
+
+    // Inject test text into the template
+    const testText = 'テストテキスト_' + Date.now();
+    const newContent = currentContent.replace(/<\/h1>/, `</h1>\n${testText}`);
+
+    // Set value via Ace editor's underlying textarea and sync with Ace
+    await page.evaluate(({ content }) => {
+      const textarea = document.querySelector('#main_edit_tpl_data') as HTMLTextAreaElement;
+      if (textarea) textarea.value = content;
+      const editorEl = document.querySelector('.ace_editor') as any;
+      if (editorEl && editorEl.env?.editor) {
+        editorEl.env.editor.setValue(content);
+      }
+    }, { content: newContent });
+
+    // Save
+    await page.locator('.c-conversionArea button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました', { timeout: 30_000 });
+
+    // Verify on the front agreement page
+    await page.goto('/help/agreement');
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-layoutRole__main')).toContainText(testText);
+
+    // Restore original content
+    await page.goto(`/${adminRoute}/content/page/19/edit`);
+    await page.waitForLoadState('load');
+
+    await page.evaluate(({ content }) => {
+      const textarea = document.querySelector('#main_edit_tpl_data') as HTMLTextAreaElement;
+      if (textarea) textarea.value = content;
+      const editorEl = document.querySelector('.ace_editor') as any;
+      if (editorEl && editorEl.env?.editor) {
+        editorEl.env.editor.setValue(content);
+      }
+    }, { content: currentContent });
+
+    await page.locator('.c-conversionArea button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました', { timeout: 30_000 });
+  });
+
+  test('basicinfo_authentication_key - EA1101-UC01-T01', async ({ page }) => {
+    // Navigate to authentication key settings
+    await page.goto(`/${adminRoute}/store/plugin/authentication_setting`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('認証キー設定');
+
+    // Input an authentication key
+    await page.locator('#admin_authentication_authentication_key').fill('1111111111111111111111111111111111111111');
+
+    // Submit
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました', { timeout: 30_000 });
+  });
+
   test('basicinfo_calendar_settings - EA0712-UC01-T01/T02', async ({ page }) => {
     await page.goto(`/${adminRoute}/setting/shop/calendar`);
     await page.waitForLoadState('load');

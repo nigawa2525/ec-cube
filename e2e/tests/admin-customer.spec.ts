@@ -172,4 +172,120 @@ test.describe('Admin Customer (EA05)', () => {
     // After deletion, the search should show no results
     await expect(page.locator(noResultMsg)).toContainText('検索条件に合致するデータが見つかりませんでした');
   });
+
+  test('customer_会員編集_注文履歴あり - edit customer with order history', async ({ page }) => {
+    // Go to customer list
+    await goCustomerList(page);
+    await searchCustomer(page, '');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Find a customer that has orders by checking each customer edit page
+    const rows = await page.locator('#search_form table tbody tr').count();
+    let foundCustomerWithOrders = false;
+
+    for (let i = 1; i <= rows; i++) {
+      const href = await page.locator(`#search_form table tbody tr:nth-child(${i}) td:nth-child(2) a`).getAttribute('href');
+      if (!href) continue;
+
+      // Navigate to the customer edit page
+      await page.goto(href);
+      await page.waitForLoadState('load');
+
+      // Check if there is order history
+      const historyBox = await page.locator('#orderHistory').innerHTML();
+      if (!historyBox.includes('購入履歴がありません')) {
+        foundCustomerWithOrders = true;
+
+        // Verify the order history section is present and has links
+        await expect(page.locator('#orderHistory')).toBeVisible();
+        const orderLinks = await page.locator('#orderHistory a[href*="/admin/order/"]').count();
+        expect(orderLinks).toBeGreaterThan(0);
+
+        // Edit the customer name
+        await page.locator('#admin_customer_name_name01').fill('注文履歴テスト');
+
+        // Submit
+        await page.locator('#customer_form .c-conversionArea button[type="submit"]').click();
+        await page.waitForLoadState('load');
+        await expect(page.locator(successAlert)).toContainText('保存しました');
+        break;
+      }
+
+      // Go back to customer list
+      await goCustomerList(page);
+      await searchCustomer(page, '');
+    }
+
+    expect(foundCustomerWithOrders).toBeTruthy();
+  });
+
+  test('customer_CSV出力項目設定 - navigate to CSV settings page', async ({ page }) => {
+    await goCustomerList(page);
+    await searchCustomer(page, '');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click CSV出力項目設定 link (navigates to /admin/setting/shop/csv/2)
+    await page.locator('a[href*="/setting/shop/csv/2"]').click();
+    await page.waitForLoadState('load');
+
+    // Verify we are on the CSV settings page
+    await expect(page.locator(pageTitle)).toContainText('CSV出力項目設定');
+
+    // Verify CSV type is 2 (customer CSV)
+    const csvTypeValue = await page.locator('#csv-type').inputValue();
+    expect(csvTypeValue).toBe('2');
+  });
+
+  test('customer_仮会員メール再送 - resend provisional member email', async ({ page }) => {
+    // Search for non-active (仮会員) customers
+    await goCustomerList(page);
+
+    // Open detail search
+    await page.locator('#search_form [data-bs-toggle="collapse"][href="#searchDetail"]').click();
+    await page.locator('#searchDetail').waitFor({ state: 'visible' });
+    await page.waitForTimeout(500);
+
+    // Uncheck 本会員 (status 2), keep 仮会員 (status 1) checked
+    await page.locator('#admin_search_customer_customer_status_2').uncheck();
+
+    // Search
+    await page.locator(searchBtn).click();
+    await page.waitForLoadState('load');
+
+    // Check if there are any 仮会員 results
+    const resultText = await page.locator(searchResultMsg).textContent() || '';
+    if (resultText.includes('0件') || resultText.includes('見つかりませんでした')) {
+      test.skip(true, 'No non-active customers found, skipping resend mail test');
+      return;
+    }
+
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click the 仮会員メール再送 button on the first row
+    const mailResendBtn = page.locator('#search_form table tbody tr:first-child td.align-middle.pe-3 a[data-bs-toggle="modal"]').first();
+    await mailResendBtn.click();
+    await page.waitForTimeout(500);
+
+    // The modal should be visible
+    await expect(page.locator('.modal.show')).toBeVisible();
+    await expect(page.locator('.modal.show .modal-title')).toContainText('仮会員メールを再送します');
+
+    // First cancel to test the cancel flow (use the キャンセル button in the footer)
+    await page.locator('.modal.show .modal-footer button[data-bs-dismiss="modal"]').click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.modal.show')).not.toBeVisible();
+
+    // Now actually send: click mail resend again
+    await mailResendBtn.click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.modal.show')).toBeVisible();
+
+    // Click send button
+    await page.locator('.modal.show a.btn-ec-delete').click();
+    await page.waitForLoadState('load');
+
+    // Verify we stayed on or returned to the customer list page (no error)
+    // The page should not show an error
+    await expect(page.locator('.c-pageTitle')).toContainText('会員');
+  });
 });
