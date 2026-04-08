@@ -37,6 +37,16 @@ export default defineConfig({
     },
     {
       name: 'plugin-tests',
+      testMatch: /plugin-.*\.spec\.ts/,
+      dependencies: ['setup'],
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: path.join(__dirname, '.auth', 'admin.json'),
+      },
+    },
+    {
+      name: 'admin-tests',
+      testMatch: /admin-.*\.spec\.ts/,
       dependencies: ['setup'],
       use: {
         ...devices['Desktop Chrome'],
