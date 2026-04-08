@@ -777,4 +777,161 @@ test.describe('Admin Product (EA03)', () => {
     // Verify 0 results
     await expect(page.locator(searchResultMsg)).toContainText('検索結果：0件が該当しました');
   });
+
+  test('product_規格表示順の変更 - EA0303-UC04-T01', async ({ page }) => {
+    // Navigate to class name management
+    await page.goto(`/${adminRoute}/product/class_name`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('規格管理');
+
+    // Helper: click sort button and wait for AJAX to complete.
+    // Dismisses any Bootstrap tooltips first to avoid overlay interception.
+    async function clickSortButton(selector: string) {
+      await page.evaluate(() => {
+        document.querySelectorAll('.tooltip').forEach(el => el.remove());
+      });
+      await page.locator(selector).click({ force: true });
+      await page.waitForTimeout(200);
+      await page.waitForFunction(() => !document.querySelector('.modal-backdrop'), {}, { timeout: 10_000 });
+    }
+
+    // (li:nth-child(1) = form, li:nth-child(2) = header, li:nth-child(3+) = data)
+    const nameSelector = (n: number) => `ul.list-group > li:nth-child(${n}) > div > div.col.d-flex.align-items-center > a`;
+
+    // Read initial names dynamically (data may vary between environments)
+    const name3 = (await page.locator(nameSelector(3)).textContent())!.trim();
+    const name4 = (await page.locator(nameSelector(4)).textContent())!.trim();
+
+    // Move row 3 down (class_name uses a.down class, not a.action-down)
+    await clickSortButton('ul.list-group > li:nth-child(3) a.down');
+
+    // Verify swapped: [name4, name3]
+    await expect(page.locator(nameSelector(3))).toContainText(name4);
+    await expect(page.locator(nameSelector(4))).toContainText(name3);
+
+    // Move row 4 up to restore: [name3, name4]
+    await clickSortButton('ul.list-group > li:nth-child(4) a.up');
+
+    // Verify restored
+    await expect(page.locator(nameSelector(3))).toContainText(name3);
+    await expect(page.locator(nameSelector(4))).toContainText(name4);
+  });
+
+  test('product_分類表示順の変更 - EA0311-UC01-T01', async ({ page }) => {
+    // Navigate to class name management, then click into サイズ class categories
+    await page.goto(`/${adminRoute}/product/class_name`);
+    await page.waitForLoadState('load');
+
+    // Click サイズ (row 3) to go to class category management
+    await page.locator('ul.list-group > li:nth-child(3) > div > div.col.d-flex.align-items-center > a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('規格分類管理');
+
+    // Helper: click sort button and wait for AJAX to complete.
+    // Dismisses any Bootstrap tooltips first, then clicks the sort button via jQuery
+    // to avoid tooltip overlay interception issues.
+    async function clickSortButton(selector: string) {
+      // Dismiss any visible tooltips by triggering their disposal
+      await page.evaluate(() => {
+        document.querySelectorAll('.tooltip').forEach(el => el.remove());
+      });
+      await page.locator(selector).click({ force: true });
+      await page.waitForTimeout(200);
+      await page.waitForFunction(() => !document.querySelector('.modal-backdrop'), {}, { timeout: 10_000 });
+    }
+
+    // (li:nth-child(1) = form, li:nth-child(2) = header, li:nth-child(3+) = data)
+    const nameSelector = (n: number) => `ul.list-group > li:nth-child(${n}) > div > div.col.d-flex.align-items-center`;
+
+    // Read initial names at positions 3, 4, 5
+    const name3 = (await page.locator(nameSelector(3)).textContent())!.trim();
+    const name4 = (await page.locator(nameSelector(4)).textContent())!.trim();
+    const name5 = (await page.locator(nameSelector(5)).textContent())!.trim();
+
+    // Move row 3 down: [name4, name3, name5]
+    await clickSortButton('ul.list-group > li:nth-child(3) a.action-down');
+
+    await expect(page.locator(nameSelector(3))).toContainText(name4);
+    await expect(page.locator(nameSelector(4))).toContainText(name3);
+    await expect(page.locator(nameSelector(5))).toContainText(name5);
+
+    // Move row 4 down: [name4, name5, name3]
+    await clickSortButton('ul.list-group > li:nth-child(4) a.action-down');
+
+    await expect(page.locator(nameSelector(3))).toContainText(name4);
+    await expect(page.locator(nameSelector(4))).toContainText(name5);
+    await expect(page.locator(nameSelector(5))).toContainText(name3);
+
+    // Move row 5 up: [name4, name3, name5]
+    await clickSortButton('ul.list-group > li:nth-child(5) a.action-up');
+
+    await expect(page.locator(nameSelector(3))).toContainText(name4);
+    await expect(page.locator(nameSelector(4))).toContainText(name3);
+    await expect(page.locator(nameSelector(5))).toContainText(name5);
+
+    // Move row 4 up to restore original order: [name3, name4, name5]
+    await clickSortButton('ul.list-group > li:nth-child(4) a.action-up');
+
+    await expect(page.locator(nameSelector(3))).toContainText(name3);
+    await expect(page.locator(nameSelector(4))).toContainText(name4);
+    await expect(page.locator(nameSelector(5))).toContainText(name5);
+  });
+
+  test('product_カテゴリ表示順の変更 - EA0305-UC03-T01', async ({ page }) => {
+    // Navigate to category management
+    await page.goto(`/${adminRoute}/product/category`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('カテゴリ管理');
+
+    // Helper: click sort button and wait for AJAX to complete.
+    // Dismisses any Bootstrap tooltips first, then clicks the sort button via jQuery
+    // to avoid tooltip overlay interception issues.
+    async function clickSortButton(selector: string) {
+      // Dismiss any visible tooltips by triggering their disposal
+      await page.evaluate(() => {
+        document.querySelectorAll('.tooltip').forEach(el => el.remove());
+      });
+      await page.locator(selector).click({ force: true });
+      await page.waitForTimeout(200);
+      await page.waitForFunction(() => !document.querySelector('.modal-backdrop'), {}, { timeout: 10_000 });
+    }
+
+    // Category list selector
+    // (li:nth-child(1) = form, li:nth-child(2) = header, li:nth-child(3+) = data)
+    const nameSelector = (n: number) =>
+      `div.c-contentsArea__primaryCol ul.list-group > li:nth-child(${n}) > div > div.col.d-flex.align-items-center > a`;
+
+    // Read initial names at positions 3, 4, 5
+    const name3 = (await page.locator(nameSelector(3)).textContent())!.trim();
+    const name4 = (await page.locator(nameSelector(4)).textContent())!.trim();
+    const name5 = (await page.locator(nameSelector(5)).textContent())!.trim();
+
+    // Move row 3 down: [name4, name3, name5]
+    await clickSortButton(`div.c-contentsArea__primaryCol ul.list-group > li:nth-child(3) a.action-down`);
+
+    await expect(page.locator(nameSelector(3))).toContainText(name4);
+    await expect(page.locator(nameSelector(4))).toContainText(name3);
+    await expect(page.locator(nameSelector(5))).toContainText(name5);
+
+    // Move row 4 down: [name4, name5, name3]
+    await clickSortButton(`div.c-contentsArea__primaryCol ul.list-group > li:nth-child(4) a.action-down`);
+
+    await expect(page.locator(nameSelector(3))).toContainText(name4);
+    await expect(page.locator(nameSelector(4))).toContainText(name5);
+    await expect(page.locator(nameSelector(5))).toContainText(name3);
+
+    // Move row 5 up: [name4, name3, name5]
+    await clickSortButton(`div.c-contentsArea__primaryCol ul.list-group > li:nth-child(5) a.action-up`);
+
+    await expect(page.locator(nameSelector(3))).toContainText(name4);
+    await expect(page.locator(nameSelector(4))).toContainText(name3);
+    await expect(page.locator(nameSelector(5))).toContainText(name5);
+
+    // Move row 4 up to restore original order: [name3, name4, name5]
+    await clickSortButton(`div.c-contentsArea__primaryCol ul.list-group > li:nth-child(4) a.action-up`);
+
+    await expect(page.locator(nameSelector(3))).toContainText(name3);
+    await expect(page.locator(nameSelector(4))).toContainText(name4);
+    await expect(page.locator(nameSelector(5))).toContainText(name5);
+  });
 });

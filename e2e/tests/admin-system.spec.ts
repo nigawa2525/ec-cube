@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
+import path from 'path';
 
 const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
+const authFile = path.join(__dirname, '..', '.auth', 'admin.json');
 
 test.describe('Admin System Info (EA08)', () => {
   test.describe.configure({ mode: 'serial' });
@@ -199,7 +201,46 @@ test.describe('Admin System Info (EA08)', () => {
     await expect(page.locator('#page_admin_setting_system_security > div.c-container > div.c-contentsArea > form > div > div.c-contentsArea__primaryCol > div > div > div.card-header > div > div.col-8 > span').first()).toContainText('管理画面URL設定');
   });
 
-  test('systeminfo_security_deny_list - EA0804-UC01-T05', async ({ page }) => {
+  test('systeminfo_security_directory_name - EA0804-UC01-T02', async ({ page }) => {
+    // Navigate to security settings
+    await page.goto(`/${adminRoute}/setting/system/security`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('#page_admin_setting_system_security .c-pageTitle__titles')).toContainText('セキュリティ管理');
+
+    // Change admin directory name to 'admin2'
+    await page.locator('#admin_security_admin_route_dir').fill('admin2');
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // After directory change, we are redirected to login on the new URL
+    // Login via the new admin URL
+    await page.goto('/admin2/');
+    await page.waitForLoadState('load');
+    await page.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+    await page.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await expect(page.locator('.c-pageTitle__titles')).toContainText('ホーム', { timeout: 30_000 });
+
+    // Change back to original admin directory
+    await page.goto('/admin2/setting/system/security');
+    await page.waitForLoadState('load');
+    await page.locator('#admin_security_admin_route_dir').fill(adminRoute);
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // Login again via the original admin URL and save auth state for subsequent tests
+    await page.goto(`/${adminRoute}/`);
+    await page.waitForLoadState('load');
+    await page.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+    await page.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await expect(page.locator('.c-pageTitle__titles')).toContainText('ホーム', { timeout: 30_000 });
+
+    // Save the new auth state so subsequent tests can use it
+    await page.context().storageState({ path: authFile });
+  });
+
+  test('systeminfo_security_admin_deny_list - EA0804-UC01-T05', async ({ page }) => {
     await page.goto(`/${adminRoute}/setting/system/security`);
     await page.waitForLoadState('load');
     await expect(page.locator('#page_admin_setting_system_security .c-pageTitle__titles')).toContainText('セキュリティ管理');
@@ -212,16 +253,95 @@ test.describe('Admin System Info (EA08)', () => {
 
     // Set deny hosts to a safe value (not our own IP to avoid lockout)
     await page.locator('#admin_security_admin_deny_hosts').fill('1.1.1.1');
-    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
     await page.waitForLoadState('load');
 
     await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
 
-    // Clean up - remove the deny list entry
+    // Verify the value was saved
     await page.goto(`/${adminRoute}/setting/system/security`);
     await page.waitForLoadState('load');
+    await expect(page.locator('#admin_security_admin_deny_hosts')).toHaveValue('1.1.1.1');
+
+    // Clean up - remove the deny list entry
     await page.locator('#admin_security_admin_deny_hosts').fill('');
-    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
+  });
+
+  test('systeminfo_security_front_ip_allow_list - EA0804-UC01-T06', async ({ page }) => {
+    // Test 1: Allow list matching our IP - front should be accessible
+    await page.goto(`/${adminRoute}/setting/system/security`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#admin_security_front_allow_hosts').fill('127.0.0.1');
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
+
+    // Verify front page is accessible (our IP is in the allow list)
+    await page.goto('/');
+    await page.waitForLoadState('load');
+    await expect(page.locator('body')).not.toContainText('アクセスできません');
+
+    // Test 2: Allow list NOT matching our IP - front should be blocked
+    await page.goto(`/${adminRoute}/setting/system/security`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#admin_security_front_allow_hosts').fill('192.168.100.1');
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
+
+    // Verify front page is blocked (our IP is NOT in the allow list)
+    await page.goto('/');
+    await page.waitForLoadState('load');
+    await expect(page.locator('body')).toContainText('アクセスできません');
+
+    // Clean up - remove the allow list
+    await page.goto(`/${adminRoute}/setting/system/security`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_security_front_allow_hosts').fill('');
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
+  });
+
+  test('systeminfo_security_front_ip_deny_list - EA0804-UC01-T07', async ({ page }) => {
+    // Test 1: Deny list matching our IP - front should be blocked
+    await page.goto(`/${adminRoute}/setting/system/security`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#admin_security_front_deny_hosts').fill('127.0.0.1');
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
+
+    // Verify front page is blocked (our IP is in the deny list)
+    await page.goto('/');
+    await page.waitForLoadState('load');
+    await expect(page.locator('body')).toContainText('アクセスできません');
+
+    // Test 2: Deny list NOT matching our IP - front should be accessible
+    await page.goto(`/${adminRoute}/setting/system/security`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#admin_security_front_deny_hosts').fill('192.168.100.1');
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
+
+    // Verify front page is accessible (our IP is NOT in the deny list)
+    await page.goto('/');
+    await page.waitForLoadState('load');
+    await expect(page.locator('body')).not.toContainText('アクセスできません');
+
+    // Clean up - remove the deny list
+    await page.goto(`/${adminRoute}/setting/system/security`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_security_front_deny_hosts').fill('');
+    await page.locator('#page_admin_setting_system_security form .c-conversionArea button[type="submit"]').click();
     await page.waitForLoadState('load');
     await expect(page.locator('.c-contentsArea .alert-success')).toContainText('保存しました', { timeout: 30_000 });
   });

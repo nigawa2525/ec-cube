@@ -109,6 +109,45 @@ test.describe('Admin Basic Info (EA07)', () => {
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
+  test('basicinfo_支払方法入れ替え - EA0704-UC02-T01', async ({ page }) => {
+    // Navigate to payment list
+    await page.goto(`/${adminRoute}/setting/shop/payment`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('支払方法一覧');
+
+    // Helper: click sort button and wait for AJAX to complete.
+    async function clickSortButton(selector: string) {
+      await page.evaluate(() => {
+        document.querySelectorAll('.tooltip').forEach(el => el.remove());
+      });
+      await page.locator(selector).click({ force: true });
+      await page.waitForTimeout(200);
+      await page.waitForFunction(() => !document.querySelector('.modal-backdrop'), {}, { timeout: 10_000 });
+    }
+
+    // Payment list: li:nth-child(1) = header, li:nth-child(2+) = data
+    // Verify 郵便振替 is at position 1 (nth-child(2))
+    const paymentSelector = (n: number) =>
+      `.c-contentsArea__primaryCol .c-primaryCol .card-body ul li:nth-child(${n + 1})`;
+    await expect(page.locator(paymentSelector(1))).toContainText('郵便振替');
+
+    // Move first payment down (nth-child(2) = row 1)
+    await clickSortButton(`.c-contentsArea__primaryCol .list-group-flush .list-group-item:nth-child(2) a.action-down`);
+
+    // Reload and verify 郵便振替 moved to position 2 (nth-child(3))
+    await page.goto(`/${adminRoute}/setting/shop/payment`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(paymentSelector(2))).toContainText('郵便振替');
+
+    // Move it back up (nth-child(3) = row 2)
+    await clickSortButton(`.c-contentsArea__primaryCol .list-group-flush .list-group-item:nth-child(3) a.action-up`);
+
+    // Reload and verify 郵便振替 is back at position 1
+    await page.goto(`/${adminRoute}/setting/shop/payment`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(paymentSelector(1))).toContainText('郵便振替');
+  });
+
   test('basicinfo_delivery_crud - EA0707-UC01/UC02/EA0706-UC03', async ({ page }) => {
     const deliveryName = 'test_delivery_' + Date.now();
     const deliveryNameEdited = deliveryName + '_edited';
@@ -180,6 +219,44 @@ test.describe('Admin Basic Info (EA07)', () => {
     await page.waitForLoadState('load');
     const afterDeleteCount = await page.locator('.c-contentsArea__primaryCol li.sortable-item').count();
     expect(afterDeleteCount).toBe(beforeCount);
+  });
+
+  test('basicinfo_配送方法一覧順序変更 - EA0706-UC02-T01', async ({ page }) => {
+    // Navigate to delivery list
+    await page.goto(`/${adminRoute}/setting/shop/delivery`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('配送方法一覧');
+
+    // Helper: click sort button and wait for AJAX to complete.
+    async function clickSortButton(selector: string) {
+      await page.evaluate(() => {
+        document.querySelectorAll('.tooltip').forEach(el => el.remove());
+      });
+      await page.locator(selector).click({ force: true });
+      await page.waitForTimeout(200);
+      await page.waitForFunction(() => !document.querySelector('.modal-backdrop'), {}, { timeout: 10_000 });
+    }
+
+    // Delivery list: li:nth-child(1) = header, li:nth-child(2+) = data
+    const nameSelector = (n: number) => `div.c-primaryCol ul > li:nth-child(${n}) > div > div.col.d-flex.align-items-center > a`;
+
+    // Verify initial order
+    await expect(page.locator(nameSelector(2))).toContainText('サンプル宅配');
+    await expect(page.locator(nameSelector(3))).toContainText('サンプル業者');
+
+    // Move row 2 down
+    await clickSortButton(`div.c-primaryCol ul > li:nth-child(2) a.action-down`);
+
+    // Verify swapped
+    await expect(page.locator(nameSelector(2))).toContainText('サンプル業者');
+    await expect(page.locator(nameSelector(3))).toContainText('サンプル宅配');
+
+    // Move row 3 up to restore
+    await clickSortButton(`div.c-primaryCol ul > li:nth-child(3) a.action-up`);
+
+    // Verify restored
+    await expect(page.locator(nameSelector(2))).toContainText('サンプル宅配');
+    await expect(page.locator(nameSelector(3))).toContainText('サンプル業者');
   });
 
   test('basicinfo_tax_rate - EA0708-UC01-T01', async ({ page }) => {
