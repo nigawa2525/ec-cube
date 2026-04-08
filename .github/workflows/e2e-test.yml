@@ -139,9 +139,11 @@ jobs:
         working-directory: e2e
         env:
           BASE_URL: 'http://127.0.0.1:8000'
+          DATABASE_URL: ${{ matrix.database_url }}
           ECCUBE_ADMIN_ROUTE: 'admin'
           ADMIN_USER: 'admin'
           ADMIN_PASSWORD: 'password'
+          APP_ENV: 'codeception'
           CI: 'true'
         run: |
           npx playwright test --project=setup --project=${{ steps.project.outputs.project }} ${{ matrix.suite }}.spec.ts
