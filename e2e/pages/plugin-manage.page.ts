@@ -62,8 +62,8 @@ export class PluginManagePage {
     await expect(modal.locator('#officialPluginDeleteButton')).toBeVisible({ timeout: 10_000 });
     await modal.locator('#officialPluginDeleteButton').click();
 
-    // 削除処理完了待ち (AJAX)
-    await expect(modal.locator('.modal-body p')).toContainText(expectedMessage, { timeout: 60_000 });
+    // 削除処理完了待ち (AJAX / composer uninstall が遅い場合がある)
+    await expect(modal.locator('.modal-body p')).toContainText(expectedMessage, { timeout: 120_000 });
     // 「完了」ボタン (3番目のボタン) をクリック
     await modal.locator('.modal-footer button:nth-child(3)').click();
     return this;
