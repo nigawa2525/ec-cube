@@ -20,6 +20,7 @@ export class EmperorStore extends StorePlugin {
   async アップデート(): Promise<this> {
     this.tables = ['dtb_bar'];
     this.columns = ['dtb_cart.bar_id'];
+    this.traits.clear();
     this.traits.set('Plugin\\Emperor\\Entity\\Cart2Trait', 'src/Eccube/Entity/Cart');
 
     await super.アップデート();

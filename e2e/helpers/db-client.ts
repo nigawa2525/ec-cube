@@ -122,5 +122,6 @@ export async function createDbClient(databaseUrl: string): Promise<DbClient> {
     await client.connect();
     return client;
   }
-  throw new Error(`Unsupported database URL: ${databaseUrl}`);
+  const protocol = new URL(databaseUrl).protocol;
+  throw new Error(`Unsupported database protocol: ${protocol}`);
 }

@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/plugin-test';
+import { test } from '../fixtures/plugin-test';
 import { HorizonStore } from '../models/plugins/horizon-store';
 import { HorizonLocal } from '../models/plugins/horizon-local';
 import { BundleStore } from '../models/plugins/bundle-store';
