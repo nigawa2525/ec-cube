@@ -17,6 +17,7 @@ export class PluginLocalInstallPage {
   async アップロード(tgzPath: string): Promise<PluginManagePage> {
     await this.page.locator('#plugin_local_install_plugin_archive').setInputFiles(tgzPath);
     await this.page.locator('#upload-form button[type="submit"]').click();
+    await this.page.waitForLoadState('load');
     return PluginManagePage.at(this.page);
   }
 }

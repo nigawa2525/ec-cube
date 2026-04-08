@@ -96,7 +96,7 @@ export class PluginManagePage {
     const row = this.localPluginRow(code);
     await row.locator('i.fa-play').locator('..').click();
     await this.page.waitForLoadState('load');
-    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR)).toContainText('有効にしました。', { timeout: 30_000 });
+    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText('有効にしました。', { timeout: 30_000 });
     return this;
   }
 
@@ -105,7 +105,7 @@ export class PluginManagePage {
     const row = this.localPluginRow(code);
     await row.locator('i.fa-pause').locator('..').click();
     await this.page.waitForLoadState('load');
-    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR)).toContainText('無効にしました。', { timeout: 30_000 });
+    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText('無効にしました。', { timeout: 30_000 });
     return this;
   }
 
