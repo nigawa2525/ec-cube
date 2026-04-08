@@ -53,5 +53,15 @@ export default defineConfig({
         storageState: path.join(__dirname, '.auth', 'admin.json'),
       },
     },
+    {
+      name: 'front-tests',
+      testMatch: /front-.*\.spec\.ts/,
+      dependencies: ['setup'],
+      use: {
+        ...devices['Desktop Chrome'],
+        // Front tests don't need admin auth, use empty state
+        storageState: { cookies: [], origins: [] },
+      },
+    },
   ],
 });

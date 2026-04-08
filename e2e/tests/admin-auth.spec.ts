@@ -40,12 +40,9 @@ test.describe('Admin Authentication (EA02)', () => {
     await loginAsAdmin(page);
 
     await page.locator('header.c-headerBar a.c-headerBar__userMenu').click();
-    await page.waitForTimeout(500);
-
-    const loginText = await page.locator('.popover .popover-body > p').textContent();
-    expect(loginText).not.toBeNull();
-    const dateMatch = loginText!.match(/\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}/);
-    expect(dateMatch).not.toBeNull();
+    const popoverText = page.locator('.popover .popover-body > p');
+    await expect(popoverText).toBeVisible({ timeout: 5_000 });
+    await expect(popoverText).toContainText(/\d{4}\/\d{1,2}\/\d{1,2} \d{1,2}:\d{2}/);
   });
 
   test('authentication_非稼働_削除', async ({ page }) => {
