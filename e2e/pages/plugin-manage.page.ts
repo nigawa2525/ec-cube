@@ -5,8 +5,9 @@ import { type Page, type Locator, expect } from '@playwright/test';
  * Codeception の PluginManagePage に相当
  */
 export class PluginManagePage {
-  /** フラッシュメッセージ (成功/エラー) のセレクタ */
-  static readonly ALERT_SELECTOR = '#page_admin_store_plugin .c-contentsArea .alert-dismissible:not(.alert-primary) span';
+  /** フラッシュメッセージ (成功/エラー) のセレクタ
+   * 複数のアラートが表示される場合があるため、.first() と合わせて使用 */
+  static readonly ALERT_SELECTOR = '#page_admin_store_plugin > div.c-container > div.c-contentsArea > div.alert:not(.alert-primary).alert-dismissible span';
 
   constructor(private readonly page: Page) {}
 
@@ -34,25 +35,28 @@ export class PluginManagePage {
   async ストアプラグイン_有効化(code: string, expectedMessage = '有効にしました。'): Promise<this> {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
-    await row.locator('i[title="有効化"]').locator('..').click();
+    // fa-play = 有効化アイコン (Bootstrap tooltip が title を data-bs-original-title に移動するため CSS クラスで特定)
+    await row.locator('i.fa-play').locator('..').click();
     await this.page.waitForLoadState('load');
-    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR)).toContainText(expectedMessage, { timeout: 30_000 });
+    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
     return this;
   }
 
   async ストアプラグイン_無効化(code: string, expectedMessage = '無効にしました。'): Promise<this> {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
-    await row.locator('i[title="無効化"]').locator('..').click();
+    // fa-pause = 無効化アイコン
+    await row.locator('i.fa-pause').locator('..').click();
     await this.page.waitForLoadState('load');
-    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR)).toContainText(expectedMessage, { timeout: 30_000 });
+    await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
     return this;
   }
 
   async ストアプラグイン_削除(code: string, expectedMessage = '削除が完了しました。'): Promise<this> {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
-    await row.locator('i[title="削除"]').locator('..').click();
+    // fa-close = 削除アイコン
+    await row.locator('i.fa-close').locator('..').click();
 
     const modal = this.page.locator('#officialPluginDeleteModal');
     await expect(modal.locator('#officialPluginDeleteButton')).toBeVisible({ timeout: 10_000 });
@@ -90,7 +94,7 @@ export class PluginManagePage {
   async 独自プラグイン_有効化(code: string): Promise<this> {
     await this.dismissAlerts();
     const row = this.localPluginRow(code);
-    await row.locator('i[title="有効化"]').locator('..').click();
+    await row.locator('i.fa-play').locator('..').click();
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR)).toContainText('有効にしました。', { timeout: 30_000 });
     return this;
@@ -99,7 +103,7 @@ export class PluginManagePage {
   async 独自プラグイン_無効化(code: string): Promise<this> {
     await this.dismissAlerts();
     const row = this.localPluginRow(code);
-    await row.locator('i[title="無効化"]').locator('..').click();
+    await row.locator('i.fa-pause').locator('..').click();
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR)).toContainText('無効にしました。', { timeout: 30_000 });
     return this;
@@ -108,7 +112,7 @@ export class PluginManagePage {
   async 独自プラグイン_削除(code: string): Promise<this> {
     await this.dismissAlerts();
     const row = this.localPluginRow(code);
-    await row.locator('i[title="削除"]').locator('..').click();
+    await row.locator('i.fa-close').locator('..').click();
 
     const modal = this.page.locator('#localPluginDeleteModal');
     await expect(modal.locator('.modal-footer a')).toBeVisible({ timeout: 10_000 });
