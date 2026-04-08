@@ -67,11 +67,11 @@ test.describe('Front Product (EF02)', () => {
   });
 
   test('EF0202-UC01-T02 商品詳細 カテゴリリンク', async ({ page }) => {
-    // 商品詳細ページへ遷移 (product 1)
+    // 商品詳細ページへ遷移 (product 1 = EC-CUBE fixture data: '彩のジェラートCUBE')
     await page.goto('/products/detail/1');
     await page.waitForLoadState('load');
 
-    // 商品名が表示される
+    // 商品名が表示される (EC-CUBE標準フィクスチャの商品名)
     await expect(page.locator('.ec-headingTitle')).toContainText('彩のジェラートCUBE');
 
     // ヘッダーナビからカテゴリを選択

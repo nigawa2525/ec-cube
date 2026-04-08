@@ -308,27 +308,28 @@ test.describe('Admin Basic Info (EA07)', () => {
     await page.waitForLoadState('load');
     await expect(page.locator('.c-pageTitle')).toContainText('定休日カレンダー');
 
-    // Delete any existing holidays to avoid "already exists" conflicts
-    while (true) {
-      const deleteButtons = page.locator('table tbody tr a[data-bs-toggle="modal"]');
-      const count = await deleteButtons.count();
-      if (count === 0) break;
-      await deleteButtons.first().click();
-      await page.waitForTimeout(500);
-      // Click the delete confirmation button in the modal
-      await page.locator('.modal.show .btn-ec-delete').click();
-      await page.waitForLoadState('load');
-      await page.waitForTimeout(500);
-    }
-
-    // Use dates far enough in the future to avoid conflicts
+    // Use dates far enough in the future to avoid conflicts with existing holidays
     const now = new Date();
     const year = now.getFullYear() + 1; // next year to avoid conflicts
     const date1 = `${year}-01-15`;
     const date2 = `${year}-02-15`;
+    const testHolidayTitle1 = '定休日テスト1';
+    const testHolidayTitle2 = '定休日テスト2';
+
+    // Delete only holidays created by this test (from a previous run) to avoid conflicts
+    for (const title of [testHolidayTitle1, testHolidayTitle2]) {
+      const row = page.locator(`table tbody tr:has-text("${title}")`);
+      if (await row.count() > 0) {
+        await row.locator('a[data-bs-toggle="modal"]').click();
+        await page.waitForTimeout(500);
+        await page.locator('.modal.show .btn-ec-delete').click();
+        await page.waitForLoadState('load');
+        await page.waitForTimeout(500);
+      }
+    }
 
     // Set holiday 1
-    await page.locator('#calendar_item_new #calendar_title').fill('定休日テスト1');
+    await page.locator('#calendar_item_new #calendar_title').fill(testHolidayTitle1);
     await page.evaluate((date) => {
       const el = document.querySelector('#calendar_item_new #calendar_holiday') as HTMLInputElement;
       if (el) el.value = date;
@@ -341,7 +342,7 @@ test.describe('Admin Basic Info (EA07)', () => {
     await page.goto(`/${adminRoute}/setting/shop/calendar`);
     await page.waitForLoadState('load');
 
-    await page.locator('#calendar_item_new #calendar_title').fill('定休日テスト2');
+    await page.locator('#calendar_item_new #calendar_title').fill(testHolidayTitle2);
     await page.evaluate((date) => {
       const el = document.querySelector('#calendar_item_new #calendar_holiday') as HTMLInputElement;
       if (el) el.value = date;

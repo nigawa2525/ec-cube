@@ -19,6 +19,8 @@ async function searchProduct(page: import('@playwright/test').Page, keyword: str
 }
 
 test.describe('Admin Product (EA03)', () => {
+  // Tests are interdependent (e.g., create then search), so run in serial mode
+  test.describe.configure({ mode: 'serial' });
 
   test('product_商品検索', async ({ page }) => {
     await goProductList(page);
@@ -167,9 +169,20 @@ test.describe('Admin Product (EA03)', () => {
   });
 
   test('product_商品の廃止', async ({ page }) => {
+    // Create a dedicated product for the discontinue test to avoid affecting existing products
+    await page.goto(`/${adminRoute}/product/product/new`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_product_name').fill('廃止テスト用商品');
+    await page.locator('#admin_product_class_price02').fill('500');
+    await page.locator('#admin_product_Status').selectOption('公開');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Search for the product and discontinue it
     await goProductList(page);
-    await searchProduct(page, '');
-    const productName = await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4)').textContent();
+    await searchProduct(page, '廃止テスト用商品');
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：1件');
 
     await page.locator('#form_bulk table tbody tr:first-child input[type="checkbox"]').check();
     await page.locator('#form_bulk button:has-text("廃止")').first().click();
@@ -275,7 +288,11 @@ test.describe('Admin Product (EA03)', () => {
     await page.locator('#form1 button').click();
     await page.waitForLoadState('load');
 
-    // Should not see success message (form validation prevents submission)
+    // Verify validation error is displayed for the empty fields
+    await expect(page.locator('#form1 .invalid-feedback').first()).toBeVisible();
+    // Should not see success message
+    await expect(page.locator('.alert-success')).toHaveCount(0);
+
     // Create a valid class
     await page.goto(`/${adminRoute}/product/class_name`);
     await page.waitForLoadState('load');
@@ -512,23 +529,29 @@ test.describe('Admin Product (EA03)', () => {
   });
 
   test('product_タグ編集', async ({ page }) => {
+    // Create a tag to edit
+    const originalTagName = `edit-orig-tag-${Date.now()}`;
+    const editedTagName = `edit-tag-${Date.now()}`;
     await page.goto(`/${adminRoute}/product/tag`);
     await page.waitForLoadState('load');
+    await page.locator('#admin_product_tag_name').fill(originalTagName);
+    await page.locator('.c-primaryCol .list-group > li:first-child form button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
 
-    const tagName = `edit-tag-${Date.now()}`;
-
-    // Click edit on first tag (li:nth-child(3))
-    await page.locator('.c-primaryCol .list-group > li:nth-child(3) a[data-bs-original-title=編集]').click();
+    // Find the tag row by name and click edit
+    const tagRow = page.locator(`.c-primaryCol .list-group > li:has-text("${originalTagName}")`);
+    await tagRow.locator('a[data-bs-original-title=編集]').click();
     await page.waitForTimeout(500);
 
     // Fill in new name
-    await page.locator('.c-primaryCol .list-group > li:nth-child(3) input[type=text]').fill(tagName);
+    await tagRow.locator('input[type=text]').fill(editedTagName);
 
     // Submit
-    await page.locator('.c-primaryCol .list-group > li:nth-child(3) .btn-ec-conversion').click();
+    await tagRow.locator('.btn-ec-conversion').click();
     await page.waitForLoadState('load');
     await expect(page.locator('.alert-success')).toContainText('保存しました');
-    await expect(page.locator('.c-primaryCol .list-group')).toContainText(tagName);
+    await expect(page.locator('.c-primaryCol .list-group')).toContainText(editedTagName);
   });
 
   test('product_タグ削除', async ({ page }) => {
@@ -542,8 +565,9 @@ test.describe('Admin Product (EA03)', () => {
     await expect(page.locator('.alert-success')).toContainText('保存しました');
     await expect(page.locator('.c-primaryCol .list-group')).toContainText(tagName);
 
-    // Delete the first tag in the list (the one we just created, at li:nth-child(3))
-    await page.locator('.c-primaryCol .list-group > li:nth-child(3) a[data-bs-target="#DeleteModal"]').click();
+    // Find the tag row by name and click delete
+    const tagRow = page.locator(`.c-primaryCol .list-group > li:has-text("${tagName}")`);
+    await tagRow.locator('a[data-bs-target="#DeleteModal"]').click();
     await page.waitForTimeout(500);
     await expect(page.locator('#DeleteModal')).toBeVisible();
     await page.locator('.modal.show .btn-ec-delete').click();

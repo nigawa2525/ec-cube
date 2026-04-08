@@ -256,9 +256,8 @@ test.describe.serial('Page management', () => {
     const row = page.locator(`.table.table-sm tbody tr`, { hasText: pageName });
     await row.locator('a[data-bs-toggle="modal"]').click();
 
-    // Accept delete modal
-    const modal = row.locator('.modal.show, div[class*="modal"][class*="show"]');
-    await modal.locator('a.btn-ec-delete').click();
+    // Accept delete modal (modal may be rendered at page level, not inside the row)
+    await page.locator('.modal.show a.btn-ec-delete').click();
     await page.waitForLoadState('load');
     await expect(page.locator('.alert-success')).toContainText('削除しました');
 

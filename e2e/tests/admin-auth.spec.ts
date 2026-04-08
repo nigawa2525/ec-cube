@@ -5,7 +5,7 @@ const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
 // 認証テストはログイン/ログアウトを繰り返すため、共有storageStateを使わない
 test.use({ storageState: { cookies: [], origins: [] } });
 
-async function loginAsAdmin(page: import('@playwright/test').Page, loginId = 'admin', password = 'password') {
+async function loginAsAdmin(page: import('@playwright/test').Page, loginId = process.env.ADMIN_USER || 'admin', password = process.env.ADMIN_PASSWORD || 'password') {
   await page.goto(`/${adminRoute}/`);
   await page.locator('#login_id').fill(loginId);
   await page.locator('#password').fill(password);
@@ -111,7 +111,7 @@ test.describe('Admin Authentication (EA02)', () => {
     // メンバー管理からパスワードを password1 に変更する
     await page.goto(`/${adminRoute}/setting/system/member`);
     await expect(page.locator('.c-pageTitle')).toContainText('メンバー管理');
-    await page.locator('.c-contentsArea table a[href*="/edit"]').first().click();
+    await page.locator('table tr:has-text("管理者") a[href*="/edit"]').first().click();
     await expect(page.locator('.c-pageTitle')).toContainText('メンバー登録');
     await page.locator('#admin_member_plain_password_first').fill(password1);
     await page.locator('#admin_member_plain_password_second').fill(password1);

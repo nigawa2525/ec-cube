@@ -66,8 +66,12 @@ test.describe('Front Customer Registration (EF04)', () => {
     await page.locator('button.ec-blockBtn--action[type="submit"]').click();
     await page.waitForLoadState('load');
 
-    // 会員登録画面のままでエラーが表示される
+    // 会員登録画面のままで姓フィールドのバリデーションエラーが表示される
     await expect(page.locator('.ec-pageHeader h1')).toContainText('新規会員登録');
+    // The name input container gets the 'error' class and an ec-errorMessage is rendered for the empty last name
+    const nameInputContainer = page.locator('#entry_name_name01').locator('..');
+    await expect(nameInputContainer).toHaveClass(/error/);
+    await expect(nameInputContainer.locator('.ec-errorMessage')).toBeVisible();
   });
 
   test('EF0401-UC01-T04 会員登録 同意しないボタン', async ({ page }) => {
