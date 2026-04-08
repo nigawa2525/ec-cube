@@ -1,0 +1,44 @@
+volumes:
+  ss-pg-database:
+    driver: local
+
+services:
+  ec-cube:
+    entrypoint: /var/www/html/dockerbuild/docker-php-entrypoint-screenshot
+    command: ["apache2-foreground"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - "./dockerbuild:/var/www/html/dockerbuild"
+      - "./app/Plugin:/var/www/html/app/Plugin"
+      - "./screenshots/setup_test_data.php:/var/www/html/screenshots/setup_test_data.php"
+    environment:
+      DATABASE_URL: "postgres://dbuser:secret@postgres/eccubedb"
+      DATABASE_SERVER_VERSION: 14
+      DATABASE_CHARSET: 'utf8'
+    ports: !override
+      - "8180:80"
+      - "4431:443"
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "25432:5432"
+    volumes:
+      - ss-pg-database:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: pg_isready -U dbuser
+      interval: 3s
+      timeout: 3s
+      retries: 3
+
+  mailcatcher:
+    ports: !override
+      - "2080:1080"
+      - "2025:1025"

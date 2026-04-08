@@ -1,0 +1,5 @@
+2026-03-26T23:41:33+09:00 plugins=[]
+2026-03-26T23:42:03+09:00 plugins=[]
+2026-03-26T23:42:17+09:00 plugins=[Boomerang]
+2026-03-26T23:42:17+09:00 plugin=Boomerang dir=/home/runner/work/ec-cube/ec-cube/app/Plugin/Boomerang/Controller exists=YES
+2026-03-26T23:42:17+09:00 IMPORTED routes from /home/runner/work/ec-cube/ec-cube/app/Plugin/Boomerang/Controller

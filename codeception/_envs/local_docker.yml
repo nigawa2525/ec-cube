@@ -1,0 +1,15 @@
+modules:
+    config:
+        WebDriver:
+            host: '127.0.0.1'
+            port: 9515
+            url: 'http://127.0.0.1:8080'
+            capabilities:
+                goog:chromeOptions:
+                    args: ["--headless", "--disable-gpu", "--no-sandbox", "--window-size=1680,3000"]
+                    prefs:
+                        download.default_directory: '/Users/kimotonobuhiko/Sites/workspace/ec-cube/codeception/_support/_downloads'
+            wait: 30
+        MailCatcher:
+            url: '127.0.0.1'
+            port: 1080

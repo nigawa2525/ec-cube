@@ -1,0 +1,15 @@
+2026-03-26T23:15:31+09:00 DB lookup failed: An exception occurred while executing a query: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: boolean = integer
+LINE 1: SELECT code FROM dtb_plugin WHERE enabled = 1
+                                                  ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+2026-03-26T23:15:31+09:00 plugins=
+2026-03-26T23:16:00+09:00 DB lookup failed: An exception occurred while executing a query: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: boolean = integer
+LINE 1: SELECT code FROM dtb_plugin WHERE enabled = 1
+                                                  ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+2026-03-26T23:16:00+09:00 plugins=
+2026-03-26T23:16:14+09:00 DB lookup failed: An exception occurred while executing a query: SQLSTATE[42883]: Undefined function: 7 ERROR:  operator does not exist: boolean = integer
+LINE 1: SELECT code FROM dtb_plugin WHERE enabled = 1
+                                                  ^
+HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+2026-03-26T23:16:14+09:00 plugins=

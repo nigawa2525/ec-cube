@@ -29,7 +29,7 @@ export class PluginManagePage {
   private storePluginRow(code: string): Locator {
     return this.storePluginSection()
       .getByRole('row')
-      .filter({ has: this.page.locator('td p', { hasText: code }) });
+      .filter({ has: this.page.getByRole('cell').locator('p', { hasText: new RegExp(`^${code}$`) }) });
   }
 
   async ストアプラグイン_有効化(code: string, expectedMessage = '有効にしました。'): Promise<this> {
@@ -148,13 +148,10 @@ export class PluginManagePage {
     // 既存のフラッシュメッセージを閉じる (クリックを遮らないように)
     const closeButtons = this.page.locator('.alert-dismissible .btn-close');
     const count = await closeButtons.count();
-    for (let i = 0; i < count; i++) {
-      await closeButtons.nth(i).click().catch(() => {});
-    }
+    const clicks = Array.from({ length: count }, (_, i) => closeButtons.nth(i).click());
+    await Promise.allSettled(clicks);
     // tooltip も除去
-    await this.page.evaluate(() => {
-      document.querySelectorAll('.tooltip').forEach(e => e.remove());
-    });
+    await this.page.locator('.tooltip').evaluateAll(els => els.forEach(e => e.remove()));
   }
 }
 
