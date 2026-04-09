@@ -36,13 +36,19 @@ export class PluginManagePage {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
     const enableLink = row.locator('a[href*="/enable"]');
+    const disableLink = row.locator('a[href*="/disable"]');
     if (await enableLink.count() > 0) {
       await enableLink.click();
-    } else {
-      // 既に有効な場合は disable リンクの href から ID を取得して enable URL を構築
-      const disableHref = await row.locator('a[href*="/disable"]').getAttribute('href');
+    } else if (await disableLink.count() > 0) {
+      // 既に有効な場合は disable リンクの href から enable URL を構築
+      const disableHref = await disableLink.getAttribute('href');
       const enableUrl = disableHref!.replace('/disable', '/enable');
       await this.page.goto(enableUrl);
+    } else {
+      // どちらもない場合はページをリロードして再試行
+      await this.page.reload();
+      await this.page.waitForLoadState('load');
+      await this.storePluginRow(code).locator('a[href*="/enable"]').click();
     }
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
@@ -53,12 +59,18 @@ export class PluginManagePage {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
     const disableLink = row.locator('a[href*="/disable"]');
+    const enableLink = row.locator('a[href*="/enable"]');
     if (await disableLink.count() > 0) {
       await disableLink.click();
-    } else {
-      const enableHref = await row.locator('a[href*="/enable"]').getAttribute('href');
+    } else if (await enableLink.count() > 0) {
+      const enableHref = await enableLink.getAttribute('href');
       const disableUrl = enableHref!.replace('/enable', '/disable');
       await this.page.goto(disableUrl);
+    } else {
+      // 有効化/無効化リンクがどちらもない場合はページをリロードして再試行
+      await this.page.reload();
+      await this.page.waitForLoadState('load');
+      await this.storePluginRow(code).locator('a[href*="/disable"]').click();
     }
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
