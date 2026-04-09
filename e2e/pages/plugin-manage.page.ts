@@ -35,9 +35,15 @@ export class PluginManagePage {
   async ストアプラグイン_有効化(code: string, expectedMessage = '有効にしました。'): Promise<this> {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
-    // 有効化リンク: fa-play アイコンまたは href*="/enable" リンク
     const enableLink = row.locator('a[href*="/enable"]');
-    await enableLink.click();
+    if (await enableLink.count() > 0) {
+      await enableLink.click();
+    } else {
+      // 既に有効な場合は disable リンクの href から ID を取得して enable URL を構築
+      const disableHref = await row.locator('a[href*="/disable"]').getAttribute('href');
+      const enableUrl = disableHref!.replace('/disable', '/enable');
+      await this.page.goto(enableUrl);
+    }
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
     return this;
@@ -47,7 +53,13 @@ export class PluginManagePage {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
     const disableLink = row.locator('a[href*="/disable"]');
-    await disableLink.click();
+    if (await disableLink.count() > 0) {
+      await disableLink.click();
+    } else {
+      const enableHref = await row.locator('a[href*="/enable"]').getAttribute('href');
+      const disableUrl = enableHref!.replace('/enable', '/disable');
+      await this.page.goto(disableUrl);
+    }
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
     return this;
