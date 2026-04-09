@@ -35,8 +35,9 @@ export class PluginManagePage {
   async ストアプラグイン_有効化(code: string, expectedMessage = '有効にしました。'): Promise<this> {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
-    // fa-play = 有効化アイコン (Bootstrap tooltip が title を data-bs-original-title に移動するため CSS クラスで特定)
-    await row.locator('i.fa-play').locator('..').click();
+    // 有効化リンク: fa-play アイコンまたは href*="/enable" リンク
+    const enableLink = row.locator('a[href*="/enable"]');
+    await enableLink.click();
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
     return this;
@@ -45,8 +46,8 @@ export class PluginManagePage {
   async ストアプラグイン_無効化(code: string, expectedMessage = '無効にしました。'): Promise<this> {
     await this.dismissAlerts();
     const row = this.storePluginRow(code);
-    // fa-pause = 無効化アイコン
-    await row.locator('i.fa-pause').locator('..').click();
+    const disableLink = row.locator('a[href*="/disable"]');
+    await disableLink.click();
     await this.page.waitForLoadState('load');
     await expect(this.page.locator(PluginManagePage.ALERT_SELECTOR).first()).toContainText(expectedMessage, { timeout: 30_000 });
     return this;

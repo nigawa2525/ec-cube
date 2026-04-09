@@ -71,5 +71,6 @@ export abstract class AbstractPlugin {
 
   async タブを切り替え(targetPage: Page): Promise<void> {
     this.page = targetPage;
+    await this.page.bringToFront();
   }
 }
