@@ -354,7 +354,7 @@ test.describe('Throttling (EF09)', () => {
       await page.waitForLoadState('load');
 
       // Submit the form as-is (no changes needed)
-      await page.locator('div.ec-editRole form button.ec-blockBtn--action[type="submit"]').click();
+      await page.locator('div.ec-editRole form button[type="submit"]').click();
       await page.waitForLoadState('load');
       await expect(page.locator('div.ec-pageHeader h1')).toContainText('会員情報編集(完了)');
     }
@@ -362,7 +362,7 @@ test.describe('Throttling (EF09)', () => {
     // Exceeds limit
     await page.goto('/mypage/change');
     await page.waitForLoadState('load');
-    await page.locator('div.ec-editRole form button.ec-blockBtn--action[type="submit"]').click();
+    await page.locator('div.ec-editRole form button[type="submit"]').click();
     await page.waitForLoadState('load');
     await expect(page.locator('p.ec-reportDescription')).toContainText(
       '試行回数の上限を超過しました。しばらくお待ちいただき、再度お試しください。'
