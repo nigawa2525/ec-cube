@@ -122,6 +122,26 @@ jobs:
           bin/console doctrine:schema:create --env=dev
           bin/console eccube:fixtures:load --env=dev
 
+      - name: Create test customer
+        env:
+          PGPASSWORD: 'password'
+        run: |
+          # globalSetup の setup-fixtures.php は APP_ENV=prod では Generator が動かないため
+          # psql で直接テスト用顧客を作成
+          HASH=$(php -r "echo password_hash('password', PASSWORD_BCRYPT);")
+          SECRET=$(php -r "echo bin2hex(random_bytes(16));")
+          psql eccube_db -h 127.0.0.1 -U postgres -c "
+            INSERT INTO dtb_customer (
+              id, customer_status_id, pref_id, name01, name02, kana01, kana02,
+              postal_code, addr01, addr02, email, phone_number, password, salt,
+              secret_key, create_date, update_date, discriminator_type
+            ) VALUES (
+              nextval('dtb_customer_id_seq'), 2, 13, 'テスト', '太郎', 'テスト', 'タロウ',
+              '1000001', '千代田区千代田', '1-1', 'playwright@test.test', '0312345678',
+              '${HASH}', '', '${SECRET}', NOW(), NOW(), 'customer'
+            ) ON CONFLICT (email) DO NOTHING;
+          "
+
       - name: Install Playwright
         working-directory: e2e
         run: |
