@@ -411,6 +411,157 @@ test.describe.serial('JavaScript management', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Layout management (create, drag block, verify, cleanup)
+// ---------------------------------------------------------------------------
+test.describe.serial('Layout management', () => {
+  const layoutName = 'layout_test_' + Date.now();
+  const pageName = 'page_test_' + Date.now();
+
+  test('create layout with drag-and-drop block - EA0605-UC01-T01/T02/T03', async ({ page }) => {
+    test.setTimeout(180_000);
+
+    /**
+     * Helper: Move a block by name to a target position area.
+     * Uses DOM manipulation + updateUpDown() to update hidden form inputs,
+     * matching the approach of layout_design.js's sortable update handler.
+     */
+    async function moveBlockToPosition(blockName: string, targetPositionId: string) {
+      await page.evaluate(({ blockName, targetPositionId }) => {
+        // Find the block element containing the specified block name
+        const blocks = document.querySelectorAll('[id^="detail_box__layout_item"]');
+        let blockEl: Element | null = null;
+        blocks.forEach(el => {
+          if (el.querySelector('span')?.textContent?.trim() === blockName) {
+            blockEl = el;
+          }
+        });
+        if (!blockEl) throw new Error(`Block "${blockName}" not found`);
+
+        const sourceParent = blockEl.parentElement;
+        const target = document.getElementById(targetPositionId);
+        if (!target) throw new Error(`Target "${targetPositionId}" not found`);
+
+        // Remove placeholder from target if present
+        const placeholder = target.querySelector('.target-placeholder');
+        if (placeholder) placeholder.remove();
+
+        // Move the DOM element to the target
+        target.appendChild(blockEl);
+
+        // Add placeholder back to source if it has no more blocks
+        if (sourceParent && sourceParent.querySelectorAll('.block').length === 0) {
+          const tplEl = document.getElementById('target-placeholder');
+          if (tplEl) {
+            sourceParent.insertAdjacentHTML('beforeend', tplEl.innerHTML);
+          }
+        }
+
+        // Update the hidden form inputs via the global updateUpDown function
+        const updateUpDown = (window as any).updateUpDown;
+        if (updateUpDown) {
+          updateUpDown(target);
+          if (sourceParent) {
+            updateUpDown(sourceParent);
+          }
+        }
+      }, { blockName, targetPositionId });
+    }
+
+    // --- CREATE LAYOUT ---
+    await page.goto(`/${adminRoute}/content/layout/new`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('レイアウト管理');
+
+    // Fill in layout name and device type
+    await page.locator('#admin_layout_name').fill(layoutName);
+    await page.locator('#admin_layout_DeviceType').selectOption({ label: 'PC' });
+
+    // Move block "新着情報" to header area (#position_3)
+    await moveBlockToPosition('新着情報', 'position_3');
+    await page.waitForTimeout(500);
+
+    // Save layout
+    await page.locator('#form1 > div > div.c-conversionArea > div > div > div:nth-child(2) > div > div > button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // --- CREATE PAGE with this layout ---
+    await page.goto(`/${adminRoute}/content/page/new`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#main_edit_name').fill(pageName);
+    await page.locator('#main_edit_file_name').fill(pageName);
+    await page.locator('#main_edit_url').fill(pageName);
+
+    // Select our new layout
+    await page.locator('#main_edit_PcLayout').selectOption({ label: layoutName });
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // --- VERIFY block appears on front page ---
+    await page.goto(`/user_data/${pageName}`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-layoutRole__header .ec-newsRole')).toBeVisible();
+
+    // --- EDIT: Move block to footer (#position_10) ---
+    await page.goto(`/${adminRoute}/content/layout`);
+    await page.waitForLoadState('load');
+    await page.locator(`a:has-text("${layoutName}")`).click();
+    await page.waitForLoadState('load');
+
+    await moveBlockToPosition('新着情報', 'position_10');
+    await page.waitForTimeout(500);
+
+    await page.locator('#form1 > div > div.c-conversionArea > div > div > div:nth-child(2) > div > div > button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify block is in footer now
+    await page.goto(`/user_data/${pageName}`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-layoutRole__footer .ec-newsRole')).toBeVisible();
+
+    // --- ATTEMPT DELETE LAYOUT (should fail because page uses it) ---
+    await page.goto(`/${adminRoute}/content/layout`);
+    await page.waitForLoadState('load');
+
+    // Find the card that contains our layout name and click its delete button
+    const layoutCard = page.locator(`.card`, { hasText: layoutName });
+    await layoutCard.locator('button[data-bs-toggle="modal"][data-bs-target="#DeleteModal"]').click();
+    await page.locator('#DeleteModal').waitFor({ state: 'visible' });
+    await page.locator('#DeleteModal a.btn-ec-delete').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert')).toContainText('削除できませんでした');
+
+    // --- DELETE PAGE ---
+    await page.goto(`/${adminRoute}/content/page`);
+    await page.waitForLoadState('load');
+
+    const pageRow = page.locator(`.table.table-sm tbody tr`, { hasText: pageName });
+    await pageRow.locator('a[data-bs-toggle="modal"]').click();
+    await page.locator('.modal.show a.btn-ec-delete').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('削除しました');
+
+    // --- DELETE LAYOUT ---
+    await page.goto(`/${adminRoute}/content/layout`);
+    await page.waitForLoadState('load');
+
+    const layoutCard2 = page.locator(`.card`, { hasText: layoutName });
+    await layoutCard2.locator('button[data-bs-toggle="modal"][data-bs-target="#DeleteModal"]').click();
+    await page.locator('#DeleteModal').waitFor({ state: 'visible' });
+    await page.locator('#DeleteModal a.btn-ec-delete').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('削除しました');
+
+    // Verify layout is gone
+    await expect(page.locator('.c-contentsArea')).not.toContainText(layoutName);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cache management
 // ---------------------------------------------------------------------------
 test.describe('Cache management', () => {

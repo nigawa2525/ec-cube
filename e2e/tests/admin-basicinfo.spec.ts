@@ -2,6 +2,20 @@ import { test, expect } from '@playwright/test';
 
 const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
 
+/**
+ * Helper: Re-login to admin if session expired.
+ * When tests create new browser contexts for front operations,
+ * the admin session may be invalidated on the server side.
+ */
+async function ensureAdminLoggedIn(page: import('@playwright/test').Page) {
+  if (await page.locator('#login_id').count() > 0) {
+    await page.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+    await page.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForLoadState('load');
+  }
+}
+
 test.describe('Admin Basic Info (EA07)', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -482,6 +496,352 @@ test.describe('Admin Basic Info (EA07)', () => {
     await page.locator('button.ladda-button[type="submit"]').click();
     await page.waitForLoadState('load');
     await expect(page.locator('.alert-success')).toContainText('保存しました', { timeout: 30_000 });
+  });
+
+  test('basicinfo_ポイント設定_有効 - EA0701-UC01-T16', async ({ page }) => {
+    test.setTimeout(300_000);
+
+    const price = 2800;
+    const pointRate = 2;
+    const pointConversionRate = 5;
+    const expectedPoint = Math.floor(price * pointRate / 100);
+    const expectedPointText = `${expectedPoint.toLocaleString()} pt`;
+
+    // Prepare product stock
+    await page.goto(`/${adminRoute}/product/product/2/edit`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#admin_product_class_price02').fill(String(price));
+    await page.locator('#admin_product_class_stock').fill('1000');
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Enable point feature with specified rates
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    // Enable point feature checkbox
+    const pointCheckbox = page.locator('#shop_master_option_point');
+    if (!await pointCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_point"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('#shop_master_basic_point_rate').fill(String(pointRate));
+    await page.locator('#shop_master_point_conversion_rate').fill(String(pointConversionRate));
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Get customer email via admin
+    await page.goto(`/${adminRoute}/customer/1/edit`);
+    await page.waitForLoadState('load');
+    const email = await page.locator('#admin_customer_email').inputValue();
+
+    // We need to login as a customer -- use a new context for front
+    const browser = page.context().browser()!;
+    const frontContext = await browser.newContext();
+    const frontPage = await frontContext.newPage();
+
+    // Login as this customer on front
+    await frontPage.goto('/mypage/login');
+    await frontPage.waitForLoadState('load');
+    await frontPage.locator('input[name="login_email"]').fill(email);
+    await frontPage.locator('input[name="login_pass"]').fill('password');
+    await frontPage.locator('#login_mypage button[type="submit"]').click();
+    await frontPage.waitForLoadState('load');
+
+    // Add product to cart
+    await frontPage.goto('/products/detail/2');
+    await frontPage.waitForLoadState('load');
+
+    // Select quantity if needed, then add to cart
+    await frontPage.locator('.ec-productRole__btn button[type="submit"]').first().click();
+    await frontPage.waitForLoadState('load');
+
+    // Go to cart and proceed to checkout
+    await frontPage.goto('/cart');
+    await frontPage.waitForLoadState('load');
+    await frontPage.getByRole('link', { name: 'レジに進む' }).click();
+    await frontPage.waitForLoadState('load');
+
+    // Verify point on shopping page
+    await expect(frontPage.locator('body')).toContainText('加算ポイント');
+
+    // Proceed to confirm
+    await frontPage.locator('#shopping-form button.ec-blockBtn--action').click();
+    await frontPage.waitForLoadState('load');
+
+    await expect(frontPage.locator('body')).toContainText('加算ポイント');
+
+    // Complete order
+    await frontPage.locator('#shopping-form button.ec-blockBtn--action').click();
+    await frontPage.waitForLoadState('load');
+    await expect(frontPage.locator('body')).toContainText('ご注文ありがとうございました');
+
+    // Verify on mypage order history
+    await frontPage.goto('/mypage');
+    await frontPage.waitForLoadState('load');
+    await frontPage.locator('.ec-historyRole .ec-historyListHeader__action a').first().click();
+    await frontPage.waitForLoadState('load');
+    await expect(frontPage.locator('body')).toContainText('加算ポイント');
+
+    await frontContext.close();
+  });
+
+  test('basicinfo_ポイント設定_無効 - EA0701-UC01-T17', async ({ page }) => {
+    test.setTimeout(180_000);
+
+    // Disable point feature
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    // Re-login if session expired
+    if (await page.locator('#login_id').count() > 0) {
+      await page.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+      await page.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+      await page.getByRole('button', { name: 'ログイン' }).click();
+      await page.waitForLoadState('load');
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    const pointCheckbox = page.locator('#shop_master_option_point');
+    if (await pointCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_point"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Get customer email via admin
+    await page.goto(`/${adminRoute}/customer/1/edit`);
+    await page.waitForLoadState('load');
+    const email = await page.locator('#admin_customer_email').inputValue();
+
+    // Login as customer on front
+    const browser = page.context().browser()!;
+    const frontContext = await browser.newContext();
+    const frontPage = await frontContext.newPage();
+
+    await frontPage.goto('/mypage/login');
+    await frontPage.waitForLoadState('load');
+    await frontPage.locator('input[name="login_email"]').fill(email);
+    await frontPage.locator('input[name="login_pass"]').fill('password');
+    await frontPage.locator('#login_mypage button[type="submit"]').click();
+    await frontPage.waitForLoadState('load');
+
+    // Add product to cart
+    await frontPage.goto('/products/detail/2');
+    await frontPage.waitForLoadState('load');
+    await frontPage.locator('.ec-productRole__btn button[type="submit"]').first().click();
+    await frontPage.waitForLoadState('load');
+
+    // Go to cart -> checkout
+    await frontPage.goto('/cart');
+    await frontPage.waitForLoadState('load');
+    await frontPage.getByRole('link', { name: 'レジに進む' }).click();
+    await frontPage.waitForLoadState('load');
+
+    // Verify no point display on shopping page
+    const shoppingBody = await frontPage.locator('body').textContent();
+    expect(shoppingBody).not.toContain('加算ポイント');
+
+    // Proceed to confirm
+    await frontPage.locator('#shopping-form button.ec-blockBtn--action').click();
+    await frontPage.waitForLoadState('load');
+    const confirmBody = await frontPage.locator('body').textContent();
+    expect(confirmBody).not.toContain('加算ポイント');
+
+    // Complete order
+    await frontPage.locator('#shopping-form button.ec-blockBtn--action').click();
+    await frontPage.waitForLoadState('load');
+    await expect(frontPage.locator('body')).toContainText('ご注文ありがとうございました');
+
+    await frontContext.close();
+  });
+
+  test('basicinfo_お気に入り - EA0701-UC01-T09/T10', async ({ page }) => {
+    // Disable favorite product feature
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    const favCheckbox = page.locator('#shop_master_option_favorite_product');
+    if (await favCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_favorite_product"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify on front: no favorite in header
+    await page.goto('/');
+    await page.waitForLoadState('load');
+    const headerText = await page.locator('.ec-headerNav').textContent();
+    expect(headerText).not.toContain('お気に入り');
+
+    // Verify on product detail: no favorite button
+    await page.goto('/products/detail/1');
+    await page.waitForLoadState('load');
+    const btnArea = await page.locator('.ec-productRole__btn').textContent();
+    expect(btnArea).not.toContain('お気に入りに追加');
+
+    // Re-enable favorite product feature
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    const favCheckbox2 = page.locator('#shop_master_option_favorite_product');
+    if (!await favCheckbox2.isChecked()) {
+      await page.locator('label[for="shop_master_option_favorite_product"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify on front: favorite in header
+    await page.goto('/');
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-headerNav')).toContainText('お気に入り');
+
+    // Verify on product detail: favorite button present
+    await page.goto('/products/detail/1');
+    await page.waitForLoadState('load');
+    await expect(page.locator('#favorite')).toContainText('お気に入りに追加');
+  });
+
+  test('basicinfo_税設定_適格請求書発行事業者登録番号 - EA0713-UC01-T01', async ({ page }) => {
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    await page.locator('#shop_master_company_name').fill('サンプル会社名');
+    await page.locator('#shop_master_shop_name').fill('サンプルショップ');
+    await page.locator('#shop_master_postal_code').fill('100-0001');
+    await page.locator('#shop_master_phone_number').fill('050-5555-5555');
+    await page.locator('#shop_master_invoice_registration_number').fill('T1234567890123');
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify the invoice registration number was saved
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('#shop_master_invoice_registration_number')).toHaveValue('T1234567890123');
+  });
+
+  test('basicinfo_GAタグ設定 - EA0714-UC01-T01', async ({ page }) => {
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    await page.locator('#shop_master_ga_id').fill('UA-12345678-1');
+
+    await page.waitForTimeout(1000);
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify GA tag is embedded in front page source
+    await page.goto('/');
+    await page.waitForLoadState('load');
+
+    const pageContent = await page.content();
+    expect(pageContent).toContain('https://www.googletagmanager.com/gtag/js?id=UA-12345678-1');
+
+    // Clean up: remove GA tag
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await page.locator('#shop_master_ga_id').fill('');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+  });
+
+  test('basicinfo_商品設定_在庫切れ商品の非表示 - EA0701-UC01-T13/T14', async ({ page }) => {
+    // First, set a product to have 0 stock
+    // Navigate directly to the product edit page (product ID 2 = チェリーアイスサンド)
+    await page.goto(`/${adminRoute}/product/product/2/edit`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/product/product/2/edit')) {
+      await page.goto(`/${adminRoute}/product/product/2/edit`);
+      await page.waitForLoadState('load');
+    }
+
+    await page.locator('#admin_product_class_stock').fill('0');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Enable "hide out-of-stock products"
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    const nostockCheckbox = page.locator('#shop_master_option_nostock_hidden');
+    if (!await nostockCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_nostock_hidden"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Search on front for the product - should not be found
+    await page.goto('/products/list?name=%E3%83%81%E3%82%A7%E3%83%AA%E3%83%BC%E3%82%A2%E3%82%A4%E3%82%B9%E3%82%B5%E3%83%B3%E3%83%89');
+    await page.waitForLoadState('load');
+    await expect(page.locator('body')).toContainText('お探しの商品は見つかりませんでした');
+
+    // Disable "hide out-of-stock products"
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    const nostockCheckbox2 = page.locator('#shop_master_option_nostock_hidden');
+    if (await nostockCheckbox2.isChecked()) {
+      await page.locator('label[for="shop_master_option_nostock_hidden"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Search on front for the product - should be found
+    await page.goto('/products/list?name=%E3%83%81%E3%82%A7%E3%83%AA%E3%83%BC%E3%82%A2%E3%82%A4%E3%82%B9%E3%82%B5%E3%83%B3%E3%83%89');
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-shelfGrid')).toContainText('チェリーアイスサンド');
+
+    // Restore product stock
+    await page.goto(`/${adminRoute}/product/product/2/edit`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_product_class_stock').fill('100');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
   });
 
   test('basicinfo_calendar_settings - EA0712-UC01-T01/T02', async ({ page }) => {

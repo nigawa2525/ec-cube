@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
+import { authenticator } from '@otplib/preset-default';
 
 const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
 
@@ -497,6 +498,108 @@ test.describe('Throttling (EF09)', () => {
     await page.waitForLoadState('load');
 
     await expect(page.locator('p.ec-reportDescription')).toContainText(
+      '試行回数の上限を超過しました。しばらくお待ちいただき、再度お試しください。'
+    );
+  });
+
+  // --- Admin 2FA throttling ---
+  test('管理画面二段階認証', async ({ page }) => {
+    test.setTimeout(180_000);
+
+    // First, log in as admin to create a 2FA-enabled member
+    const browser = page.context().browser()!;
+    const adminContext = await browser.newContext();
+    const adminPage = await adminContext.newPage();
+
+    await adminPage.goto(`/${adminRoute}/`);
+    await adminPage.waitForLoadState('load');
+    await adminPage.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+    await adminPage.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+    await adminPage.getByRole('button', { name: 'ログイン' }).click();
+    await expect(adminPage.locator('.c-pageTitle__titles')).toContainText('ホーム', { timeout: 30_000 });
+
+    // Create a new member with 2FA enabled
+    const loginId = 'admin_2fa_' + Date.now().toString(36);
+    const memberPassword = 'password1234';
+
+    await adminPage.goto(`/${adminRoute}/setting/system/member/new`);
+    await adminPage.waitForLoadState('load');
+    await expect(adminPage.locator('.c-pageTitle')).toContainText('メンバー登録');
+
+    await adminPage.locator('#admin_member_name').fill('2FA管理者');
+    await adminPage.locator('#admin_member_department').fill('admin_throttling');
+    await adminPage.locator('#admin_member_login_id').fill(loginId);
+    await adminPage.locator('#admin_member_plain_password_first').fill(memberPassword);
+    await adminPage.locator('#admin_member_plain_password_second').fill(memberPassword);
+    await adminPage.locator('#admin_member_Authority').selectOption({ label: 'システム管理者' });
+    await adminPage.locator('label[for="admin_member_Work_1"]').click();
+    await adminPage.locator('label[for="admin_member_two_factor_auth_enabled"]').click();
+
+    await adminPage.locator('#member_form .c-conversionArea__container button').click();
+    await adminPage.waitForLoadState('load');
+    await expect(adminPage.locator('.c-contentsArea .alert-success')).toContainText('保存しました');
+
+    // Log out admin
+    await adminPage.goto(`/${adminRoute}/logout`);
+    await adminPage.waitForLoadState('load');
+    await adminContext.close();
+
+    // Log in as the new 2FA member
+    await page.goto(`/${adminRoute}/`);
+    await page.waitForLoadState('load');
+    await page.locator('#login_id').fill(loginId);
+    await page.locator('#password').fill(memberPassword);
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForLoadState('load');
+
+    // Should be on the 2FA setup page with QR code
+    // Get the TOTP secret from the hidden field
+    const secret = await page.locator('#admin_two_factor_auth_auth_key').inputValue();
+    expect(secret).toBeTruthy();
+
+    // Generate a valid TOTP code and complete setup
+    const validCode = authenticator.generate(secret);
+    await page.locator('#admin_two_factor_auth_device_token').fill(validCode);
+    await page.getByRole('button', { name: '登録' }).click();
+    await page.waitForLoadState('load');
+
+    // Should be redirected to admin home
+    await expect(page.locator('.c-pageTitle__titles')).toContainText('ホーム', { timeout: 30_000 });
+
+    // Log out and clear the 2FA cookie
+    await page.goto(`/${adminRoute}/logout`);
+    await page.waitForLoadState('load');
+
+    // Clear 2FA cookie
+    const cookies = await page.context().cookies();
+    const twofaCookies = cookies.filter(c => c.name === 'eccube_2fa');
+    if (twofaCookies.length > 0) {
+      await page.context().clearCookies({ name: 'eccube_2fa' });
+    }
+
+    // Log in again
+    await page.goto(`/${adminRoute}/`);
+    await page.waitForLoadState('load');
+    await page.locator('#login_id').fill(loginId);
+    await page.locator('#password').fill(memberPassword);
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForLoadState('load');
+
+    // Should be on the 2FA token entry page (not setup page this time)
+    // Enter wrong tokens 5 times
+    for (let i = 0; i < 5; i++) {
+      await page.locator('#admin_two_factor_auth_device_token').fill(`${100000 + i}`);
+      await page.getByRole('button', { name: '認証' }).click();
+      await page.waitForLoadState('load');
+      await expect(page.locator('body')).toContainText('トークンに誤りがあります。再度入力してください。');
+    }
+
+    // One more wrong attempt should trigger throttling
+    await page.locator('#admin_two_factor_auth_device_token').fill('999999');
+    await page.getByRole('button', { name: '認証' }).click();
+    await page.waitForLoadState('load');
+
+    await expect(page.locator('body')).toContainText(
       '試行回数の上限を超過しました。しばらくお待ちいただき、再度お試しください。'
     );
   });

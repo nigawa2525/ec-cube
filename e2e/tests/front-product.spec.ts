@@ -216,6 +216,89 @@ test.describe('Front Product (EF02)', () => {
     await page.waitForLoadState('load');
   });
 
+  /**
+   * Helper: search for '在庫テスト商品' and navigate to its detail page.
+   * Returns the detail page URL path (e.g. '/products/detail/22').
+   */
+  async function gotoStockProduct(page: import('@playwright/test').Page): Promise<string> {
+    await page.goto('/products/list?name=在庫テスト商品');
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-shelfGrid__item').first()).toBeVisible();
+    await page.locator('.ec-shelfGrid__item a').first().click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-headingTitle')).toContainText('在庫テスト商品');
+    return new URL(page.url()).pathname;
+  }
+
+  test('EF0202-UC02-T01_stock1 商品詳細カート 注文数<販売制限数<在庫数', async ({ page }) => {
+    // 在庫テスト商品: stock=10, saleLimit=5
+    // qty=4 < saleLimit=5 < stock=10 => カートに正常追加
+    await gotoStockProduct(page);
+
+    await page.locator('#quantity').fill('4');
+    await page.locator('.add-cart').click();
+
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('カートに追加しました');
+
+    // カートへ進んで数量確認
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('在庫テスト商品');
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('4');
+
+    // カートを空にする
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+  });
+
+  test('EF0202-UC02-T02_stock2 商品詳細カート 販売制限数<注文数<在庫数', async ({ page }) => {
+    // 在庫テスト商品: stock=10, saleLimit=5
+    // saleLimit=5 < qty=6 < stock=10 => 販売制限エラー、カート数量は5
+    await gotoStockProduct(page);
+
+    await page.locator('#quantity').fill('6');
+    await page.locator('.add-cart').click();
+
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('販売制限しております');
+
+    // カートへ進んで数量が販売制限数に制限されていることを確認
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('在庫テスト商品');
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('5');
+
+    // カートを空にする
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+  });
+
+  test('EF0202-UC02-T03_stock3 商品詳細カート 販売制限数<在庫数<注文数', async ({ page }) => {
+    // 在庫テスト商品: stock=10, saleLimit=5
+    // saleLimit=5 < stock=10 < qty=12 => 販売制限エラー、カート数量は5
+    await gotoStockProduct(page);
+
+    await page.locator('#quantity').fill('12');
+    await page.locator('.add-cart').click();
+
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('販売制限しております');
+
+    // カートへ進んで数量が販売制限数に制限されていることを確認
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('在庫テスト商品');
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('5');
+
+    // カートを空にする
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+  });
+
   test('EF0202-UC02-T01 商品詳細 カート追加と削除', async ({ page }) => {
     await page.goto('/products/detail/1');
     await page.waitForLoadState('load');

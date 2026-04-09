@@ -110,5 +110,40 @@ if ($existingOrders < $orderNum) {
     echo "  Orders already exist ({$existingOrders})\n";
 }
 
+// --- 在庫・販売制限付き商品 ---
+$stockProductName = '在庫テスト商品';
+$existingStockProduct = $entityManager->getRepository(\Eccube\Entity\Product::class)
+    ->findOneBy(['name' => $stockProductName]);
+if (!$existingStockProduct) {
+    $stockProduct = $generator->createProduct($stockProductName, 0);
+    $pc = $entityManager->getRepository(\Eccube\Entity\ProductClass::class)
+        ->findOneBy(['Product' => $stockProduct, 'ClassCategory1' => null]);
+    if ($pc) {
+        $pc->setStock(10);
+        $pc->setStockUnlimited(false);
+        $pc->setSaleLimit(5);
+        $ps = $entityManager->getRepository(\Eccube\Entity\ProductStock::class)
+            ->findOneBy(['ProductClass' => $pc]);
+        if ($ps) $ps->setStock(10);
+        $entityManager->flush();
+    }
+    echo "  Created stock-limited product: {$stockProductName}\n";
+} else {
+    echo "  Stock-limited product already exists\n";
+}
+
+// --- テスト用会員 (固定メールアドレス) ---
+$testEmail = 'playwright@test.test';
+$existing = $entityManager->getRepository(Customer::class)->findOneBy(['email' => $testEmail]);
+if (!$existing) {
+    $testCustomer = $generator->createCustomer($testEmail);
+    $Status = $entityManager->getRepository(CustomerStatus::class)->find(CustomerStatus::ACTIVE);
+    $testCustomer->setStatus($Status);
+    $entityManager->flush($testCustomer);
+    echo "  Created test customer: $testEmail\n";
+} else {
+    echo "  Test customer already exists: $testEmail\n";
+}
+
 echo "Fixtures setup complete.\n";
 $kernel->shutdown();
