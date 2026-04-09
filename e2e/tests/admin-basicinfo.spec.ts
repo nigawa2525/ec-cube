@@ -845,8 +845,17 @@ test.describe('Admin Basic Info (EA07)', () => {
   });
 
   test('basicinfo_calendar_settings - EA0712-UC01-T01/T02', async ({ page }) => {
+    // 前のテストが別コンテキストでログインした場合、セッションが切れている可能性
     await page.goto(`/${adminRoute}/setting/shop/calendar`);
     await page.waitForLoadState('load');
+    if (page.url().includes('/login')) {
+      await page.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+      await page.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+      await page.getByRole('button', { name: 'ログイン' }).click();
+      await page.waitForLoadState('load');
+      await page.goto(`/${adminRoute}/setting/shop/calendar`);
+      await page.waitForLoadState('load');
+    }
     await expect(page.locator('.c-pageTitle')).toContainText('定休日カレンダー');
 
     // Use dates far enough in the future to avoid conflicts with existing holidays
