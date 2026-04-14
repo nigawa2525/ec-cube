@@ -170,5 +170,47 @@ if ($product1) {
     }
 }
 
+// --- 一括削除エラーテスト用商品 ---
+$bulkDeletePrefix = '一括削除エラーテスト';
+$existingBulkDelete = $entityManager->getRepository(\Eccube\Entity\Product::class)
+    ->findOneBy(['name' => $bulkDeletePrefix.'_受注あり_1']);
+if (!$existingBulkDelete) {
+    for ($i = 1; $i <= 3; $i++) {
+        $generator->createProduct($bulkDeletePrefix.'_受注なし_'.$i, 0);
+    }
+    $bulkCustomer = $entityManager->getRepository(Customer::class)->findAll()[0];
+    $Delivery = $entityManager->getRepository(\Eccube\Entity\Delivery::class)->findAll()[0];
+    for ($i = 1; $i <= 2; $i++) {
+        $Product = $generator->createProduct($bulkDeletePrefix.'_受注あり_'.$i, 0);
+        $Order = $generator->createOrder($bulkCustomer, $Product->getProductClasses()->toArray(), $Delivery);
+        $Order->setOrderStatus($entityManager->getRepository(OrderStatus::class)->find(OrderStatus::NEW));
+        $Order->setOrderDate(new \DateTime());
+        $entityManager->flush();
+    }
+    echo "  Created bulk delete error test products\n";
+} else {
+    echo "  Bulk delete error test products already exist\n";
+}
+
+// --- 複数カートテスト用商品 (Sale Type 2) ---
+$multiCartProductName = '複数カートテスト商品';
+$existingMultiCartProduct = $entityManager->getRepository(\Eccube\Entity\Product::class)
+    ->findOneBy(['name' => $multiCartProductName]);
+if (!$existingMultiCartProduct) {
+    $SaleType2 = $entityManager->getRepository(\Eccube\Entity\Master\SaleType::class)->find(2);
+    if ($SaleType2) {
+        $Product = $generator->createProduct($multiCartProductName, 0);
+        foreach ($Product->getProductClasses() as $pc) {
+            if ($pc->isVisible()) {
+                $pc->setSaleType($SaleType2);
+            }
+        }
+        $entityManager->flush();
+        echo "  Created multi-cart test product: {$multiCartProductName}\n";
+    }
+} else {
+    echo "  Multi-cart test product already exists\n";
+}
+
 echo "Fixtures setup complete.\n";
 $kernel->shutdown();

@@ -46,6 +46,29 @@ test.describe('Admin Product (EA03)', () => {
     await expect(page.locator(noResultMsg)).toContainText('検索条件に合致するデータが見つかりませんでした');
   });
 
+  test('product_商品検索エラー - EA0301-UC01-T03', async ({ page }) => {
+    await goProductList(page);
+    // Open advanced search
+    await page.locator('#search_form .c-outsideBlock__contents a span, #search_form a.d-inline-block').first().click();
+    await page.waitForTimeout(500);
+
+    // Inject a fake status value (999) that doesn't exist in the database
+    await page.evaluate(() => {
+      const form = document.getElementById('search_form');
+      if (form) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'admin_search_product[status][]';
+        input.value = '999';
+        form.appendChild(input);
+      }
+    });
+
+    await page.locator(searchBtn).click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(noResultMsg)).toContainText('検索条件に誤りがあります');
+  });
+
   test('product_規格確認のポップアップ表示', async ({ page }) => {
     await goProductList(page);
     await searchProduct(page, '');
@@ -738,6 +761,58 @@ test.describe('Admin Product (EA03)', () => {
     await expect(page.locator('.alert-success')).toContainText('保存しました');
   });
 
+  test('product_一覧からの規格編集規格あり - EA0310-UC02-T01', async ({ page }) => {
+    // Duplicate a product with classes to work with (avoid modifying original)
+    await goProductList(page);
+    await searchProduct(page, '彩のジェラートCUBE');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click duplicate button on first row
+    await page.locator('#form_bulk table tbody tr:first-child td.align-middle.pe-3 div div:nth-child(2) a[data-bs-toggle="modal"]').click();
+    await page.waitForTimeout(500);
+    await page.locator('.modal.show a.btn-ec-conversion').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('商品を複製しました');
+
+    // Search and select first result (the duplicate, newest first)
+    await goProductList(page);
+    await searchProduct(page, '彩のジェラートCUBE');
+    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品登録');
+
+    // Go to 規格管理
+    await page.locator('#standardConfig a[href*="product/class"]').click();
+    await page.waitForTimeout(500);
+    const confirmModal = page.locator('#confirmFormChangeModal');
+    if (await confirmModal.isVisible()) {
+      await confirmModal.locator('a.btn-ec-conversion').click();
+    }
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品規格登録');
+
+    // Verify class table is visible (product has classes)
+    await expect(page.locator('#page_admin_product_product_class table')).toBeVisible();
+
+    // Click 規格初期化 button (in card header)
+    await page.locator('#page_admin_product_product_class .card-header button').click();
+    await page.waitForTimeout(500);
+
+    // Confirm the initialization modal
+    await page.locator('#initializationConfirm .modal-footer form button').click();
+    await page.waitForLoadState('load');
+
+    // Verify classes are reset
+    await expect(page.locator('.alert-success')).toContainText('商品規格を初期化しました');
+    await expect(page.locator('#page_admin_product_product_class table')).not.toBeVisible();
+  });
+
+  test.fixme('product_一覧からの規格編集_規格あり_重複在庫の修正 - EA0310-UC02-T03', async ({ page }) => {
+    // Codeception marks this as incomplete:
+    // "ローカルで通るが何故かGitHub Actionsでエラーになるためスキップ"
+    // See: https://github.com/EC-CUBE/ec-cube/issues/6150
+  });
+
   test('product_商品の一括削除_正常', async ({ page }) => {
     // Use a fixed timestamp prefix for all 5 products
     const timestamp = Date.now();
@@ -777,6 +852,40 @@ test.describe('Admin Product (EA03)', () => {
 
     // Verify 0 results
     await expect(page.locator(searchResultMsg)).toContainText('検索結果：0件が該当しました');
+  });
+
+  test('product_商品の一括削除_削除エラー - EA0302-UC05-T05', async ({ page }) => {
+    test.setTimeout(120_000);
+    const prefix = '一括削除エラーテスト';
+
+    // Search for the bulk delete test products (created by setup-fixtures.php)
+    await goProductList(page);
+    await searchProduct(page, prefix);
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：5件が該当しました');
+
+    // Select all
+    await page.locator('#trigger_check_all').check();
+
+    // Click delete button
+    await page.locator('#form_bulk button.btn-ec-delete').click();
+    await page.waitForSelector('#bulkDelete', { state: 'visible' });
+
+    // Confirm delete
+    await page.locator('#bulkDelete').click();
+
+    // Wait for errors to appear (products with orders can't be deleted)
+    await page.waitForSelector('#bulkErrors', { state: 'visible', timeout: 30_000 });
+    await expect(page.locator('#bulkErrors')).toContainText('受注あり_1');
+    await expect(page.locator('#bulkErrors')).toContainText('受注あり_2');
+
+    // Click done
+    await page.locator('#bulkDeleteDone').click();
+    await page.waitForLoadState('load');
+
+    // Only products with orders should remain
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：2件が該当しました');
+    await expect(page.locator(searchResultList)).toContainText('受注あり');
+    await expect(page.locator(searchResultList)).not.toContainText('受注なし');
   });
 
   test('product_規格表示順の変更 - EA0303-UC04-T01', async ({ page }) => {

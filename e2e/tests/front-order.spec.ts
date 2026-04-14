@@ -568,6 +568,160 @@ test.describe('Front Order (EF03)', () => {
     await context2.close();
   });
 
+  test('EF0305-UC06-T01 ログインユーザ購入複数配送', async ({ page }) => {
+    test.setTimeout(180_000);
+
+    // Login
+    await loginAsTestCustomer(page);
+
+    // Add product 2 to cart with quantity 2
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('2');
+    await page.locator('.add-cart').click();
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // Go to checkout
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/shopping$/);
+
+    // Click multi-shipping button
+    await page.locator('button[data-path*="shipping_multiple"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('お届け先の複数指定');
+
+    // Add a new delivery address
+    await page.locator('.ec-AddAddress__new a').click();
+    await page.waitForLoadState('load');
+
+    // Fill in address form
+    await page.locator('#shopping_shipping_name_name01').fill('テスト');
+    await page.locator('#shopping_shipping_name_name02').fill('太郎');
+    await page.locator('#shopping_shipping_kana_kana01').fill('テスト');
+    await page.locator('#shopping_shipping_kana_kana02').fill('タロウ');
+    await page.locator('#shopping_shipping_postal_code').fill('1500001');
+    await page.waitForTimeout(2000); // Wait for yubinbango auto-fill
+    const prefSelect = page.locator('#shopping_shipping_address_pref');
+    if (await prefSelect.inputValue() === '') {
+      await prefSelect.selectOption('13'); // Tokyo
+    }
+    const addr01 = page.locator('#shopping_shipping_address_addr01');
+    if (await addr01.inputValue() === '') {
+      await addr01.fill('渋谷区神宮前');
+    }
+    await page.locator('#shopping_shipping_address_addr02').fill('1-1-1');
+    await page.locator('#shopping_shipping_phone_number').fill('09012345678');
+    await page.locator('button[type="submit"].ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+
+    // Back on multi-shipping page
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('お届け先の複数指定');
+
+    // Add another shipping row for the product
+    await page.locator('#button__add0').click();
+    await page.waitForTimeout(500);
+
+    // Set quantities: first row = 1, second row = 1
+    await page.locator('#form_shipping_multiple_0_shipping_0_quantity').fill('1');
+    await page.locator('#form_shipping_multiple_0_shipping_1_quantity').fill('1');
+
+    // Select different address for second row
+    const addressOptions = await page.locator('#form_shipping_multiple_0_shipping_1_customer_address option').all();
+    if (addressOptions.length > 1) {
+      const lastValue = await addressOptions[addressOptions.length - 1].getAttribute('value');
+      if (lastValue) {
+        await page.locator('#form_shipping_multiple_0_shipping_1_customer_address').selectOption(lastValue);
+      }
+    }
+
+    // Submit multi-shipping
+    await page.locator('#button__confirm').click();
+    await page.waitForLoadState('load');
+
+    // Should be back on shopping page
+    await expect(page).toHaveURL(/\/shopping$/);
+
+    // Confirm order
+    await page.locator('.ec-blockBtn--action', { hasText: '確認する' }).click();
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/shopping\/confirm/);
+
+    // Place order
+    await page.locator('.ec-blockBtn--action', { hasText: '注文する' }).click();
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/shopping\/complete/);
+  });
+
+  test('EF0303-UC01-T01 ログイン後に複数カートになればカートに戻す', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    // Login as test customer and add product 2 (Sale Type 1) to cart
+    await loginAsTestCustomer(page);
+    await addProductToCartAndGoToCart(page, 1);
+
+    // Logout
+    await page.goto('/logout');
+    await page.waitForLoadState('load');
+
+    // As guest, find and add the multi-cart product (Sale Type 2) to cart
+    await page.goto('/products/list?name=複数カートテスト商品');
+    await page.waitForLoadState('load');
+    await page.locator('.ec-shelfGrid__item a').first().click();
+    await page.waitForLoadState('load');
+
+    // Add to cart
+    await page.locator('.add-cart').click();
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // Go to checkout
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    // Login at shopping login page
+    await page.locator('input[name="login_email"]').fill('playwright@test.test');
+    await page.locator('input[name="login_pass"]').fill('password');
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForLoadState('load');
+
+    // Should redirect to cart with warning about incompatible cart items
+    await expect(page.locator('body')).toContainText('同時購入できない商品');
+  });
+
+  test('EF0305-UC09-T03 複数配送設定画面での販売制限エラー', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    // Login as test customer
+    await loginAsTestCustomer(page);
+
+    // Add product 2 to cart
+    await addProductToCartAndGoToCart(page, 1);
+
+    // Go to checkout
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/shopping$/);
+
+    // Navigate to multi-shipping page
+    await page.locator('button[data-path*="shipping_multiple"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('お届け先の複数指定');
+
+    // Set quantity to an excessive number (exceeds stock)
+    await page.locator('#form_shipping_multiple_0_shipping_0_quantity').fill('9999');
+
+    // Submit
+    await page.locator('#button__confirm').click();
+    await page.waitForLoadState('load');
+
+    // Verify stock error message
+    await expect(page.locator('body')).toContainText('在庫が不足しております');
+  });
+
   test('EF0305-UC01-T01 購入確認画面からカートに戻る', async ({ page }) => {
     // ログインしてカートに商品追加
     await loginAsTestCustomer(page);
