@@ -511,6 +511,36 @@ test.describe('Admin System Info (EA08)', () => {
     await expect(page.locator('.c-contentsArea .log-viewer')).toBeVisible();
   });
 
+  test('systeminfo_ログ表示_異常 - EA0806-UC02-T02/T03/T04', async ({ page }) => {
+    // Test with line_max = 0
+    await page.goto(`/${adminRoute}/setting/system/log`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('ログ表示');
+
+    await page.locator('#admin_system_log_line_max').fill('0');
+    await page.locator('#form1 button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#form1 .invalid-feedback')).toContainText('エラー');
+
+    // Test with line_max = -1
+    await page.goto(`/${adminRoute}/setting/system/log`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#admin_system_log_line_max').fill('-1');
+    await page.locator('#form1 button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#form1 .invalid-feedback')).toContainText('エラー');
+
+    // Test with line_max = 'a' (non-numeric)
+    await page.goto(`/${adminRoute}/setting/system/log`);
+    await page.waitForLoadState('load');
+
+    await page.locator('#admin_system_log_line_max').fill('a');
+    await page.locator('#form1 button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#form1 .invalid-feedback')).toContainText('エラー');
+  });
+
   test('systeminfo_member_self_delete_protection - EA0802-UC01-T07', async ({ page }) => {
     await page.goto(`/${adminRoute}/setting/system/member`);
     await page.waitForLoadState('load');

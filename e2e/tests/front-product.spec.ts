@@ -299,6 +299,220 @@ test.describe('Front Product (EF02)', () => {
     await page.waitForLoadState('load');
   });
 
+  test('EF0201-UC04-T02 商品一覧ページング', async ({ page }) => {
+    // Navigate to product list (新入荷 category)
+    await page.goto('/');
+    await page.waitForLoadState('load');
+    await page.locator('.ec-itemNav__nav li a', { hasText: '新入荷' }).first().click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-shelfGrid__item').first()).toBeVisible();
+
+    // Verify page 1 is active
+    await page.locator('li.ec-pager__item--active').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page.locator('li.ec-pager__item--active')).toContainText('1');
+
+    // Verify page 2 and '次へ' links exist
+    await expect(page.locator('li.ec-pager__item').first()).toBeVisible();
+
+    // Click page 2
+    await page.locator('li.ec-pager__item').first().locator('a').click();
+    await page.waitForLoadState('load');
+    await page.locator('li.ec-pager__item--active').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page.locator('li.ec-pager__item--active')).toContainText('2');
+
+    // Click '前へ' (should be first pager item now)
+    await page.locator('li.ec-pager__item').first().locator('a').click();
+    await page.waitForLoadState('load');
+    await page.locator('li.ec-pager__item--active').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page.locator('li.ec-pager__item--active')).toContainText('1');
+
+    // Click '次へ' (should be last pager item)
+    await page.locator('li.ec-pager__item').last().locator('a').click();
+    await page.waitForLoadState('load');
+    await page.locator('li.ec-pager__item--active').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page.locator('li.ec-pager__item--active')).toContainText('2');
+  });
+
+  test('EF0202-UC01-T01 商品詳細初期表示 (品切れ)', async ({ page }) => {
+    // Navigate to product detail for a product with 0 stock
+    // This uses the admin API to set stock to 0, then checks front display.
+    // We'll check product 2 (チェリーアイスサンド) which is a simple product.
+    // First, set stock to 0 via admin
+    const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
+    await page.goto(`/${adminRoute}/product/product/2/edit`);
+    await page.waitForLoadState('load');
+    // May need to login
+    if (await page.locator('#login_id').count() > 0) {
+      await page.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+      await page.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+      await page.getByRole('button', { name: 'ログイン' }).click();
+      await page.waitForLoadState('load');
+      await page.goto(`/${adminRoute}/product/product/2/edit`);
+      await page.waitForLoadState('load');
+    }
+    await page.locator('#admin_product_class_stock').fill('0');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Check front display
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+
+    // "カートに入れる" button should be disabled and show out of stock message
+    await expect(page.locator('#form1 button[type="submit"]')).toContainText('ただいま品切れ中です');
+
+    // Restore stock
+    await page.goto(`/${adminRoute}/product/product/2/edit`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_product_class_stock').fill('100');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+  });
+
+  test('EF0202-UC02-T05 商品詳細カート5 規格あり_販売制限数<注文数<在庫数', async ({ page }) => {
+    // Product 1 (彩のジェラートCUBE) has class categories
+    // Stock=10, saleLimit=2 per fixture; qty=3 > saleLimit=2
+    await page.goto('/products/detail/1');
+    await page.waitForLoadState('load');
+
+    // Select class category 1 (チョコ)
+    await page.locator('#classcategory_id1').selectOption('チョコ');
+    await page.waitForTimeout(500);
+
+    // Select class category 2 if visible
+    const select2 = page.locator('#classcategory_id2');
+    if (await select2.isVisible()) {
+      const options = select2.locator('option');
+      const count = await options.count();
+      for (let i = 0; i < count; i++) {
+        const text = await options.nth(i).textContent();
+        if (text && !text.includes('選択してください')) {
+          await select2.selectOption({ index: i });
+          break;
+        }
+      }
+      await page.waitForTimeout(500);
+    }
+
+    // Set quantity to 3 (above sale limit of 2)
+    await page.locator('#quantity').fill('3');
+    await page.locator('.add-cart').click();
+
+    // Modal should appear with sale limit message
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('販売制限しております');
+
+    // Go to cart and verify quantity is capped at sale limit
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('彩のジェラートCUBE');
+    // Quantity should be sale limit (2)
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('2');
+
+    // Clean up
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+  });
+
+  test('EF0202-UC02-T06 商品詳細カート6 規格あり_販売制限数<在庫数<注文数', async ({ page }) => {
+    // Product 1 (彩のジェラートCUBE) has class categories
+    // Stock=10, saleLimit=2 per fixture; qty=12 > stock=10 > saleLimit=2
+    await page.goto('/products/detail/1');
+    await page.waitForLoadState('load');
+
+    await page.locator('#classcategory_id1').selectOption('チョコ');
+    await page.waitForTimeout(500);
+
+    const select2 = page.locator('#classcategory_id2');
+    if (await select2.isVisible()) {
+      const options = select2.locator('option');
+      const count = await options.count();
+      for (let i = 0; i < count; i++) {
+        const text = await options.nth(i).textContent();
+        if (text && !text.includes('選択してください')) {
+          await select2.selectOption({ index: i });
+          break;
+        }
+      }
+      await page.waitForTimeout(500);
+    }
+
+    // Set quantity much higher than stock and sale limit
+    await page.locator('#quantity').fill('12');
+    await page.locator('.add-cart').click();
+
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('販売制限しております');
+
+    // Go to cart and verify quantity is capped at sale limit
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('彩のジェラートCUBE');
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('2');
+
+    // Clean up
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+  });
+
+  test('EF0202-UC03-T01 商品詳細カート7 在庫数<注文数', async ({ page }) => {
+    // Use admin to set stock to 3 for product 2 (チェリーアイスサンド)
+    const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
+    await page.goto(`/${adminRoute}/product/product/2/edit`);
+    await page.waitForLoadState('load');
+    if (await page.locator('#login_id').count() > 0) {
+      await page.locator('#login_id').fill(process.env.ADMIN_USER || 'admin');
+      await page.locator('#password').fill(process.env.ADMIN_PASSWORD || 'password');
+      await page.getByRole('button', { name: 'ログイン' }).click();
+      await page.waitForLoadState('load');
+      await page.goto(`/${adminRoute}/product/product/2/edit`);
+      await page.waitForLoadState('load');
+    }
+    await page.locator('#admin_product_class_stock').fill('3');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Go to front product detail
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+
+    // Set quantity to 4 (> stock of 3)
+    await page.locator('#quantity').fill('4');
+    await page.locator('.add-cart').click();
+
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    // Should show stock insufficient message
+    await expect(page.locator('#ec-modal-header')).toContainText('在庫が不足しております');
+
+    // Go to cart and verify quantity is capped at stock (3)
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.ec-cartRow__name').first()).toContainText('チェリーアイスサンド');
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('3');
+
+    // Clean up cart
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+
+    // Restore stock
+    await page.goto(`/${adminRoute}/product/product/2/edit`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_product_class_stock').fill('100');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+  });
+
   test('EF0202-UC02-T01 商品詳細 カート追加と削除', async ({ page }) => {
     await page.goto('/products/detail/1');
     await page.waitForLoadState('load');

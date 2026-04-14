@@ -666,6 +666,401 @@ test.describe('Admin Basic Info (EA07)', () => {
     await frontContext.close();
   });
 
+  test('basicinfo_会員設定_仮会員機能 - EA0701-UC01-T05/T06', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    // Disable provisional member feature
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    const activateCheckbox = page.locator('#shop_master_option_customer_activate');
+    if (await activateCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_customer_activate"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Register a new member on the front
+    const email1 = `activate_off_${Date.now()}@example.com`;
+    await page.goto('/entry');
+    await page.waitForLoadState('load');
+    await page.locator('#entry_name_name01').fill('姓');
+    await page.locator('#entry_name_name02').fill('名');
+    await page.locator('#entry_kana_kana01').fill('セイ');
+    await page.locator('#entry_kana_kana02').fill('メイ');
+    await page.locator('#entry_postal_code').fill('530-0001');
+    await page.locator('#entry_address_pref').selectOption({ value: '27' });
+    await page.waitForTimeout(500);
+    await page.locator('#entry_address_addr01').fill('大阪市北区');
+    await page.locator('#entry_address_addr02').fill('梅田');
+    await page.locator('#entry_phone_number').fill('111-111-111');
+    await page.locator('#entry_email_first').fill(email1);
+    await page.locator('#entry_email_second').fill(email1);
+    await page.locator('#entry_plain_password_first').fill('password1234');
+    await page.locator('#entry_plain_password_second').fill('password1234');
+    await page.locator('#entry_user_policy_check').check();
+    await page.locator('button.ec-blockBtn--action[type="submit"]').click();
+    await page.waitForLoadState('load');
+    // Confirm page -> register
+    await page.locator('button.ec-blockBtn--action[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // Check in admin: should be 本会員 (because provisional is disabled)
+    await page.goto(`/${adminRoute}/customer`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/customer')) {
+      await page.goto(`/${adminRoute}/customer`);
+      await page.waitForLoadState('load');
+    }
+    await page.locator('#admin_search_customer_multi').fill(email1);
+    // Open detail search and filter by 本会員
+    await page.locator('#search_form [data-bs-toggle="collapse"][href="#searchDetail"]').click();
+    await page.locator('#searchDetail').waitFor({ state: 'visible' });
+    // Uncheck 仮会員, keep 本会員 checked
+    await page.locator('#admin_search_customer_customer_status_1').uncheck();
+    await page.locator('#admin_search_customer_customer_status_2').check();
+    await page.locator('#search_form .c-outsideBlock__contents button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#search_form > div.c-outsideBlock__contents.mb-5 > span')).toContainText('検索結果：1件が該当しました');
+
+    // Re-enable provisional member feature
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    const activateCheckbox2 = page.locator('#shop_master_option_customer_activate');
+    if (!await activateCheckbox2.isChecked()) {
+      await page.locator('label[for="shop_master_option_customer_activate"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Register another member on the front
+    const email2 = `activate_on_${Date.now()}@example.com`;
+    // Logout front first
+    await page.goto('/logout');
+    await page.waitForLoadState('load');
+
+    await page.goto('/entry');
+    await page.waitForLoadState('load');
+    await page.locator('#entry_name_name01').fill('姓');
+    await page.locator('#entry_name_name02').fill('名');
+    await page.locator('#entry_kana_kana01').fill('セイ');
+    await page.locator('#entry_kana_kana02').fill('メイ');
+    await page.locator('#entry_postal_code').fill('530-0001');
+    await page.locator('#entry_address_pref').selectOption({ value: '27' });
+    await page.waitForTimeout(500);
+    await page.locator('#entry_address_addr01').fill('大阪市北区');
+    await page.locator('#entry_address_addr02').fill('梅田');
+    await page.locator('#entry_phone_number').fill('111-111-111');
+    await page.locator('#entry_email_first').fill(email2);
+    await page.locator('#entry_email_second').fill(email2);
+    await page.locator('#entry_plain_password_first').fill('password1234');
+    await page.locator('#entry_plain_password_second').fill('password1234');
+    await page.locator('#entry_user_policy_check').check();
+    await page.locator('button.ec-blockBtn--action[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await page.locator('button.ec-blockBtn--action[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // Check in admin: should be 仮会員 (because provisional is enabled)
+    await page.goto(`/${adminRoute}/customer`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/customer')) {
+      await page.goto(`/${adminRoute}/customer`);
+      await page.waitForLoadState('load');
+    }
+    await page.locator('#admin_search_customer_multi').fill(email2);
+    await page.locator('#search_form [data-bs-toggle="collapse"][href="#searchDetail"]').click();
+    await page.locator('#searchDetail').waitFor({ state: 'visible' });
+    // Uncheck 本会員, keep 仮会員 checked
+    await page.locator('#admin_search_customer_customer_status_2').uncheck();
+    await page.locator('#admin_search_customer_customer_status_1').check();
+    await page.locator('#search_form .c-outsideBlock__contents button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#search_form > div.c-outsideBlock__contents.mb-5 > span')).toContainText('検索結果：1件が該当しました');
+  });
+
+  test('basicinfo_会員設定_マイページ注文状況 - EA0701-UC01-T07/T08', async ({ page }) => {
+    test.setTimeout(180_000);
+
+    // Get customer email
+    await page.goto(`/${adminRoute}/customer/1/edit`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/customer/1/edit')) {
+      await page.goto(`/${adminRoute}/customer/1/edit`);
+      await page.waitForLoadState('load');
+    }
+    const email = await page.locator('#admin_customer_email').inputValue();
+
+    // Disable mypage order status display
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    const orderStatusCheckbox = page.locator('#shop_master_option_mypage_order_status_display');
+    if (await orderStatusCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_mypage_order_status_display"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Login as member and check mypage
+    const browser = page.context().browser()!;
+    const frontContext = await browser.newContext();
+    const frontPage = await frontContext.newPage();
+
+    await frontPage.goto('/mypage/login');
+    await frontPage.waitForLoadState('load');
+    await frontPage.locator('input[name="login_email"]').fill(email);
+    await frontPage.locator('input[name="login_pass"]').fill('password');
+    await frontPage.locator('#login_mypage button[type="submit"]').click();
+    await frontPage.waitForLoadState('load');
+
+    // Go to order history
+    await frontPage.goto('/mypage');
+    await frontPage.waitForLoadState('load');
+    // Click on the first order detail if available
+    const orderLink = frontPage.locator('.ec-historyRole .ec-historyListHeader__action a').first();
+    if (await orderLink.count() > 0) {
+      await orderLink.click();
+      await frontPage.waitForLoadState('load');
+      // 'ご注文状況' should NOT be visible
+      const bodyText = await frontPage.locator('.ec-historyRole').textContent() || '';
+      expect(bodyText).not.toContain('ご注文状況');
+    }
+
+    await frontContext.close();
+
+    // Re-enable mypage order status display
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    const orderStatusCheckbox2 = page.locator('#shop_master_option_mypage_order_status_display');
+    if (!await orderStatusCheckbox2.isChecked()) {
+      await page.locator('label[for="shop_master_option_mypage_order_status_display"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Login as member and check again
+    const frontContext2 = await browser.newContext();
+    const frontPage2 = await frontContext2.newPage();
+
+    await frontPage2.goto('/mypage/login');
+    await frontPage2.waitForLoadState('load');
+    await frontPage2.locator('input[name="login_email"]').fill(email);
+    await frontPage2.locator('input[name="login_pass"]').fill('password');
+    await frontPage2.locator('#login_mypage button[type="submit"]').click();
+    await frontPage2.waitForLoadState('load');
+
+    await frontPage2.goto('/mypage');
+    await frontPage2.waitForLoadState('load');
+    const orderLink2 = frontPage2.locator('.ec-historyRole .ec-historyListHeader__action a').first();
+    if (await orderLink2.count() > 0) {
+      await orderLink2.click();
+      await frontPage2.waitForLoadState('load');
+      await expect(frontPage2.locator('.ec-historyRole')).toContainText('ご注文状況');
+    }
+
+    await frontContext2.close();
+  });
+
+  test('basicinfo_会員設定_自動ログイン - EA0701-UC01-T11/T12', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    // Disable auto-login feature
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    const rememberMeCheckbox = page.locator('#shop_master_option_remember_me');
+    if (await rememberMeCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_remember_me"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify the auto-login checkbox is NOT visible on the front login page
+    await page.goto('/mypage/login');
+    await page.waitForLoadState('load');
+    const loginFormText = await page.locator('#login_mypage').textContent() || '';
+    expect(loginFormText).not.toContain('次回から自動的にログインする');
+
+    // Re-enable auto-login feature
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    const rememberMeCheckbox2 = page.locator('#shop_master_option_remember_me');
+    if (!await rememberMeCheckbox2.isChecked()) {
+      await page.locator('label[for="shop_master_option_remember_me"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify the auto-login checkbox IS visible on the front login page
+    await page.goto('/mypage/login');
+    await page.waitForLoadState('load');
+    await expect(page.locator('#login_mypage')).toContainText('次回から自動的にログインする');
+  });
+
+  test('basicinfo_税設定_商品別税率 - EA0701-UC01-T15', async ({ page }) => {
+    // Enable product-specific tax rate
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
+
+    const taxRuleCheckbox = page.locator('#shop_master_option_product_tax_rule');
+    if (!await taxRuleCheckbox.isChecked()) {
+      await page.locator('label[for="shop_master_option_product_tax_rule"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify tax rate field is visible on product edit page
+    await page.goto(`/${adminRoute}/product/product/new`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea')).toContainText('税率');
+    await expect(page.locator('#admin_product_class_tax_rate')).toBeVisible();
+
+    // Disable product-specific tax rate
+    await page.goto(`/${adminRoute}/setting/shop`);
+    await page.waitForLoadState('load');
+
+    const taxRuleCheckbox2 = page.locator('#shop_master_option_product_tax_rule');
+    if (await taxRuleCheckbox2.isChecked()) {
+      await page.locator('label[for="shop_master_option_product_tax_rule"]').click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify tax rate field is NOT visible on product edit page
+    await page.goto(`/${adminRoute}/product/product/new`);
+    await page.waitForLoadState('load');
+    const contentText = await page.locator('.c-contentsArea').textContent() || '';
+    expect(contentText).not.toContain('税率');
+    await expect(page.locator('#admin_product_class_tax_rate')).not.toBeVisible();
+  });
+
+  test('basicinfo_メール設定_テンプレート新規作成_削除 - EA0709-UC02-T02', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    const templateId = Date.now().toString();
+    const templateName = 'template_' + templateId;
+    const fileName = 'filename_' + templateId;
+    const mailSubject = 'subject_' + templateId;
+    const mailText = 'テスト本文_' + templateId;
+    const mailHtml = '<p>HTML本文</p>' + templateId;
+
+    // Navigate to mail settings page
+    await page.goto(`/${adminRoute}/setting/shop/mail`);
+    await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop/mail')) {
+      await page.goto(`/${adminRoute}/setting/shop/mail`);
+      await page.waitForLoadState('load');
+    }
+    await expect(page.locator('.c-pageTitle')).toContainText('メール設定');
+
+    // Fill new template fields
+    await page.locator('#mail_name').fill(templateName);
+    await page.locator('#mail_file_name').fill(fileName);
+    await page.locator('#mail_mail_subject').fill(mailSubject);
+
+    // Fill text body (textarea in the ace editor wrapper)
+    await page.evaluate((text) => {
+      const textarea = document.querySelector('#editor textarea') as HTMLTextAreaElement;
+      if (textarea) textarea.value = text;
+      // Also try the ace editor
+      const editorEl = document.querySelector('#editor .ace_editor') as any;
+      if (editorEl && editorEl.env?.editor) {
+        editorEl.env.editor.setValue(text);
+      }
+    }, mailText);
+
+    // Fill HTML body
+    await page.evaluate((html) => {
+      const textarea = document.querySelector('#html_editor textarea') as HTMLTextAreaElement;
+      if (textarea) textarea.value = html;
+      const editorEl = document.querySelector('#html_editor .ace_editor') as any;
+      if (editorEl && editorEl.env?.editor) {
+        editorEl.env.editor.setValue(html);
+      }
+    }, mailHtml);
+
+    // Save
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify the template was created by selecting it
+    await page.goto(`/${adminRoute}/setting/shop/mail`);
+    await page.waitForLoadState('load');
+
+    // Select the newly created template
+    await page.locator('#mail_template').selectOption({ label: templateName });
+    await page.waitForTimeout(2000);
+
+    // Verify subject
+    await expect(page.locator('#mail_mail_subject')).toHaveValue(mailSubject);
+
+    // Delete the template
+    await page.locator('button[data-bs-target="#deleteModal"]').click();
+    await page.waitForTimeout(500);
+    await page.locator('#deleteModal').waitFor({ state: 'visible' });
+    await page.locator('#deleteModal .modal-footer a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('削除しました');
+  });
+
   test('basicinfo_お気に入り - EA0701-UC01-T09/T10', async ({ page }) => {
     // Disable favorite product feature
     await page.goto(`/${adminRoute}/setting/shop`);

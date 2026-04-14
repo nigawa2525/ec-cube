@@ -219,6 +219,115 @@ test.describe('Admin Customer (EA05)', () => {
     expect(foundCustomerWithOrders).toBeTruthy();
   });
 
+  test('customer_会員削除キャンセル - cancel deletion in modal', async ({ page }) => {
+    // First create a customer to test with
+    const cancelTestEmail = `cancel_${Date.now()}@example.com`;
+    await page.goto(`/${adminRoute}/customer/new`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_customer_name_name01').fill('削除キャンセル');
+    await page.locator('#admin_customer_name_name02').fill('テスト');
+    await page.locator('#admin_customer_kana_kana01').fill('サクジョキャンセル');
+    await page.locator('#admin_customer_kana_kana02').fill('テスト');
+    await page.locator('#admin_customer_postal_code').fill('5300001');
+    await page.locator('#admin_customer_address_pref').selectOption({ value: '27' });
+    await page.locator('#admin_customer_address_addr01').fill('大阪市北区');
+    await page.locator('#admin_customer_address_addr02').fill('梅田');
+    await page.locator('#admin_customer_email').fill(cancelTestEmail);
+    await page.locator('#admin_customer_phone_number').fill('111111111');
+    await page.locator('#admin_customer_plain_password_first').fill('password1234');
+    await page.locator('#admin_customer_plain_password_second').fill('password1234');
+    await page.locator('#customer_form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(successAlert)).toContainText('保存しました');
+
+    // Search for the customer
+    await goCustomerList(page);
+    await searchCustomer(page, cancelTestEmail);
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：1件が該当しました');
+
+    // Get the customer ID before deletion attempt
+    const customerIdBefore = await page.locator('#search_form table tbody tr:first-child td:nth-child(1)').textContent();
+
+    // Click the delete icon to open modal
+    await page.locator('#search_form table tbody tr:first-child td.align-middle.pe-3 a[data-bs-toggle="modal"]').last().click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.modal.show')).toBeVisible();
+
+    // Click cancel button in modal
+    await page.locator('.modal.show .modal-footer button[data-bs-dismiss="modal"]').click();
+    await page.waitForTimeout(500);
+
+    // Verify the customer is still in the list
+    const customerIdAfter = await page.locator('#search_form table tbody tr:first-child td:nth-child(1)').textContent();
+    expect(customerIdAfter).toBe(customerIdBefore);
+  });
+
+  test('customer_会員登録_必須項目未入力 - submit empty form shows validation', async ({ page }) => {
+    await page.goto(`/${adminRoute}/customer/new`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('会員登録');
+
+    // Submit empty form
+    await page.locator('#customer_form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(500);
+
+    // The name01 field should be invalid (HTML5 validation)
+    const isInvalid = await page.locator('#admin_customer_name_name01').evaluate(
+      (el: HTMLInputElement) => !el.checkValidity()
+    );
+    expect(isInvalid).toBeTruthy();
+
+    // Success message should not be shown
+    await expect(page.locator(successAlert)).not.toBeVisible();
+  });
+
+  test('customer_会員編集_必須項目未入力 - edit with empty required fields', async ({ page }) => {
+    // Create a customer to edit
+    const editTestEmail = `editempty_${Date.now()}@example.com`;
+    await page.goto(`/${adminRoute}/customer/new`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_customer_name_name01').fill('編集空テスト');
+    await page.locator('#admin_customer_name_name02').fill('ユーザー');
+    await page.locator('#admin_customer_kana_kana01').fill('ヘンシュウカラ');
+    await page.locator('#admin_customer_kana_kana02').fill('テスト');
+    await page.locator('#admin_customer_postal_code').fill('5300001');
+    await page.locator('#admin_customer_address_pref').selectOption({ value: '27' });
+    await page.locator('#admin_customer_address_addr01').fill('大阪市北区');
+    await page.locator('#admin_customer_address_addr02').fill('梅田');
+    await page.locator('#admin_customer_email').fill(editTestEmail);
+    await page.locator('#admin_customer_phone_number').fill('111111111');
+    await page.locator('#admin_customer_plain_password_first').fill('password1234');
+    await page.locator('#admin_customer_plain_password_second').fill('password1234');
+    await page.locator('#customer_form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(successAlert)).toContainText('保存しました');
+
+    // Search and edit
+    await goCustomerList(page);
+    await searchCustomer(page, editTestEmail);
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：1件が該当しました');
+    await page.locator('#search_form table tbody tr:first-child td:nth-child(2) a').click();
+    await page.waitForLoadState('load');
+
+    // Clear the name field (required)
+    await page.locator('#admin_customer_name_name01').fill('');
+
+    // Submit
+    await page.locator('#customer_form .c-conversionArea button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(500);
+
+    // The name01 field should be invalid (HTML5 validation)
+    const isInvalid = await page.locator('#admin_customer_name_name01').evaluate(
+      (el: HTMLInputElement) => !el.checkValidity()
+    );
+    expect(isInvalid).toBeTruthy();
+
+    // Success message should not be shown
+    await expect(page.locator(successAlert)).not.toBeVisible();
+  });
+
   test('customer_CSV出力項目設定 - navigate to CSV settings page', async ({ page }) => {
     await goCustomerList(page);
     await searchCustomer(page, '');

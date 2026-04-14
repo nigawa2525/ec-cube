@@ -173,6 +173,401 @@ test.describe('Front Order (EF03)', () => {
     await expect(page.locator('.ec-newsRole')).toBeVisible();
   });
 
+  test('EF0301-UC01-T02 一覧からカートに入れる', async ({ page }) => {
+    // 商品一覧ページへ直接アクセス
+    await page.goto('/products/list?name=%E5%BD%A9%E3%81%AE%E3%82%B8%E3%82%A7%E3%83%A9%E3%83%BC%E3%83%88CUBE');
+    await page.waitForLoadState('load');
+
+    // 商品一覧ページにいることを確認
+    await expect(page).toHaveURL(/\/products\/list/);
+
+    // 規格を選択してカートに入れる
+    const firstItem = page.locator('ul.ec-shelfGrid li.ec-shelfGrid__item').first();
+    await firstItem.locator('select[name="classcategory_id1"]').selectOption({ label: 'チョコ' });
+    // classcategory_id2 が動的に更新されるのを待つ
+    await page.waitForTimeout(1000);
+    await firstItem.locator('select[name="classcategory_id2"]').selectOption({ label: '16mm × 16mm' });
+    await firstItem.locator('input[name="quantity"]').fill('1');
+    await firstItem.locator('.add-cart').click();
+
+    // モーダル表示を確認
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#ec-modal-header')).toContainText('カートに追加しました');
+
+    // カートへ進む
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // カートページ
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('ショッピングカート');
+
+    // 商品名・規格の確認
+    const cartItemName = page.locator('.ec-cartRow__name').first();
+    await expect(cartItemName).toContainText('彩のジェラートCUBE');
+    await expect(cartItemName).toContainText('チョコ');
+    await expect(cartItemName).toContainText('16mm × 16mm');
+
+    // 数量が1であること
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('1');
+  });
+
+  test('EF0301-UC01-T02 カート削除', async ({ page }) => {
+    // ログインしてカートに商品追加
+    await loginAsTestCustomer(page);
+    await addProductToCartAndGoToCart(page, 1);
+
+    // カートに商品があることを確認
+    await expect(page.locator('ul.ec-cartRow').first()).toBeVisible();
+
+    // 削除ダイアログを受け入れ
+    page.on('dialog', dialog => dialog.accept());
+
+    // 削除ボタンをクリック
+    await page.locator('.ec-cartRow__delColumn a').first().click();
+    await page.waitForLoadState('load');
+
+    // カートが空になったことを確認 (商品行が無い)
+    await expect(page.locator('ul.ec-cartRow')).toHaveCount(0);
+  });
+
+  test('EF0301-UC01-T03 カート数量増やす', async ({ page }) => {
+    // ログインしてカートに商品追加(数量1)
+    await loginAsTestCustomer(page);
+    await addProductToCartAndGoToCart(page, 1);
+
+    // 数量が1であること
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('1');
+
+    // 数量を増やすボタンをクリック
+    await page.locator('a.ec-cartRow__amountUpButton').first().click();
+    await page.waitForLoadState('load');
+
+    // 数量が2になったこと
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('2');
+  });
+
+  test('EF0301-UC01-T04 カート数量減らす', async ({ page }) => {
+    // ログインしてカートに商品追加(数量2)
+    await loginAsTestCustomer(page);
+    await addProductToCartAndGoToCart(page, 2);
+
+    // 数量が2であること
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('2');
+
+    // 数量を減らすボタンをクリック
+    await page.locator('a.ec-cartRow__amountDownButton').first().click();
+    await page.waitForLoadState('load');
+
+    // 数量が1になったこと
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('1');
+  });
+
+  test('EF0305-UC02-T01 ゲスト購入情報変更', async ({ page }) => {
+    // ログアウト状態から開始
+    await page.goto('/logout');
+    await page.waitForLoadState('load');
+
+    // カートに商品追加
+    await addProductToCartAndGoToCart(page, 1);
+
+    // レジに進む
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    // ゲスト購入
+    await page.getByRole('link', { name: 'ゲスト購入' }).click();
+    await page.waitForLoadState('load');
+
+    // お客様情報入力
+    const guestEmail = `guest_${Date.now()}@test.test`;
+    await page.locator('#nonmember_name_name01').fill('姓03');
+    await page.locator('#nonmember_name_name02').fill('名03');
+    await page.locator('#nonmember_kana_kana01').fill('セイ');
+    await page.locator('#nonmember_kana_kana02').fill('メイ');
+    await page.locator('#nonmember_postal_code').fill('530-0001');
+    await page.waitForTimeout(2000);
+    await page.locator('#nonmember_address_pref').selectOption({ value: '27' });
+    await page.locator('#nonmember_address_addr01').fill('大阪市北区');
+    await page.locator('#nonmember_address_addr02').fill('梅田2-4-9 ブリーゼタワー13F');
+    await page.locator('#nonmember_phone_number').fill('111-111-111');
+    await page.locator('#nonmember_email_first').fill(guestEmail);
+    await page.locator('#nonmember_email_second').fill(guestEmail);
+    await page.locator('button.ec-blockBtn--action', { hasText: '次へ' }).click();
+    await page.waitForLoadState('load');
+
+    // ご注文手続きページ
+    await expect(page).toHaveURL(/\/shopping$/);
+
+    // お客様情報変更
+    await page.locator('#shopping-form #customer').click();
+    await page.waitForSelector('#edit0', { state: 'visible' });
+    await page.locator('#edit0').fill('姓0301');
+    await page.locator('#customer-ok button').click();
+    await page.waitForTimeout(3000);
+
+    // 変更が反映されている
+    await expect(page.locator('#shopping-form .customer-edit.customer-name01')).toContainText('姓0301');
+
+    // お届け先変更
+    await page.locator('#shopping-form > div > div.ec-orderRole__detail > div.ec-orderDelivery > div.ec-orderDelivery__title > div > button').click();
+    await page.waitForLoadState('load');
+
+    // お届け先変更画面
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('お届け先の変更');
+    await page.locator('#shopping_shipping_name_name01').fill('姓0302');
+    await page.locator('div.ec-RegisterRole__actions button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+
+    // 変更が反映されている
+    await expect(page.locator('div.ec-orderRole div.ec-orderDelivery__address')).toContainText('姓0302');
+
+    // 確認して注文
+    await page.locator('.ec-blockBtn--action', { hasText: '確認する' }).click();
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/shopping\/confirm/);
+
+    await page.locator('.ec-blockBtn--action', { hasText: '注文する' }).click();
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/shopping\/complete/);
+    await expect(page.locator('.ec-pageHeader h1')).toContainText('ご注文完了');
+  });
+
+  test('EF0305-UC07-T01 ログインしてカートをマージ', async ({ page }) => {
+    // ログアウト状態から開始
+    await page.goto('/logout');
+    await page.waitForLoadState('load');
+
+    // 未ログイン状態で商品(チェリーアイスサンド)をカートに入れる
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+
+    // レジに進む -> ログイン
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    // ログイン
+    await page.locator('input[name="login_email"]').fill('playwright@test.test');
+    await page.locator('input[name="login_pass"]').fill('password');
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForLoadState('load');
+
+    // ご注文手続きページ -> 確認
+    await page.locator('.ec-blockBtn--action', { hasText: '確認する' }).click();
+    await page.waitForLoadState('load');
+
+    // ログアウト
+    await page.goto('/logout');
+    await page.waitForLoadState('load');
+
+    // 別の商品(彩のジェラートCUBE)をカートに入れる
+    await page.goto('/products/detail/1');
+    await page.waitForLoadState('load');
+    await page.locator('select[name="classcategory_id1"]').selectOption({ label: 'チョコ' });
+    await page.waitForTimeout(1000);
+    await page.locator('select[name="classcategory_id2"]').selectOption({ label: '16mm × 16mm' });
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+
+    // カートへ -> レジに進む
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    // ログイン
+    await page.locator('input[name="login_email"]').fill('playwright@test.test');
+    await page.locator('input[name="login_pass"]').fill('password');
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForLoadState('load');
+
+    // 注文完了まで進む
+    await page.locator('.ec-blockBtn--action', { hasText: '確認する' }).click();
+    await page.waitForLoadState('load');
+    await page.locator('.ec-blockBtn--action', { hasText: '注文する' }).click();
+    await page.waitForLoadState('load');
+
+    await expect(page).toHaveURL(/\/shopping\/complete/);
+    await expect(page.locator('.ec-pageHeader h1')).toContainText('ご注文完了');
+  });
+
+  test('EF0305-UC08-T02 購入確認画面からカートに戻るWithお届け先初期化', async ({ page }) => {
+    // ログインしてカートに商品追加
+    await loginAsTestCustomer(page);
+    await addProductToCartAndGoToCart(page, 1);
+
+    // レジに進む
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    // ご注文手続きページ
+    await expect(page).toHaveURL(/\/shopping$/);
+
+    // 確認する
+    await page.locator('.ec-blockBtn--action', { hasText: '確認する' }).click();
+    await page.waitForLoadState('load');
+
+    // ご注文確認ページ
+    await expect(page).toHaveURL(/\/shopping\/confirm/);
+
+    // カートに戻ってさらに商品を追加(カートの内容が変わる)
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await expect(page.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // カートで数量が増えていることを確認
+    await expect(page.locator('.ec-cartRow__amount').first()).toContainText('2');
+
+    // レジに進む
+    await page.locator('a.ec-blockBtn--action', { hasText: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    // ご注文手続きページに戻る(お届け先は初期化されるが、単一配送先の場合は見た目変わらない)
+    await expect(page).toHaveURL(/\/shopping$/);
+
+    // お届け先が表示されている(初期化後もデフォルトお届け先が設定される)
+    await expect(page.locator('#shopping-form div.ec-orderDelivery__title')).toContainText('お届け先');
+
+    // 注文完了まで
+    await page.locator('.ec-blockBtn--action', { hasText: '確認する' }).click();
+    await page.waitForLoadState('load');
+    await page.locator('.ec-blockBtn--action', { hasText: '注文する' }).click();
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/shopping\/complete/);
+  });
+
+  test('EF0305-UC09-T01 複数ブラウザでログインしてカートに追加する', async ({ browser }) => {
+    // ブラウザ1を作成しログイン
+    const context1 = await browser.newContext();
+    const page1 = await context1.newPage();
+    await page1.goto('/mypage/login');
+    await page1.waitForLoadState('load');
+    await page1.locator('input[name="login_email"]').fill('playwright@test.test');
+    await page1.locator('input[name="login_pass"]').fill('password');
+    await page1.getByRole('button', { name: 'ログイン' }).click();
+    await page1.waitForLoadState('load');
+
+    // ブラウザ2を作成しログイン
+    const context2 = await browser.newContext();
+    const page2 = await context2.newPage();
+    await page2.goto('/mypage/login');
+    await page2.waitForLoadState('load');
+    await page2.locator('input[name="login_email"]').fill('playwright@test.test');
+    await page2.locator('input[name="login_pass"]').fill('password');
+    await page2.getByRole('button', { name: 'ログイン' }).click();
+    await page2.waitForLoadState('load');
+
+    // ブラウザ1でカートに商品を入れる
+    await page1.goto('/products/detail/2');
+    await page1.waitForLoadState('load');
+    await page1.locator('#quantity').fill('1');
+    await page1.locator('.add-cart').click();
+    await expect(page1.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await page1.locator('div.ec-modal-box > div > a').click();
+    await page1.waitForLoadState('load');
+
+    // ブラウザ1で商品がカートにあることを確認
+    await expect(page1.locator('.ec-cartRow__name').first()).toContainText('チェリーアイスサンド');
+
+    // ブラウザ2のカートにも反映されている
+    await page2.goto('/cart');
+    await page2.waitForLoadState('load');
+    await expect(page2.locator('.ec-cartRow__name').first()).toContainText('チェリーアイスサンド');
+
+    // クリーンアップ
+    page1.on('dialog', dialog => dialog.accept());
+    const deleteLinks1 = page1.locator('.ec-cartRow__delColumn a');
+    while (await deleteLinks1.count() > 0) {
+      await deleteLinks1.first().click();
+      await page1.waitForLoadState('load');
+    }
+
+    await context1.close();
+    await context2.close();
+  });
+
+  test('EF0305-UC09-T02 複数ブラウザ 片方でログインしてカートに追加しもう一方にログインして別の商品を追加する', async ({ browser }) => {
+    // ブラウザ1を作成しログイン
+    const context1 = await browser.newContext();
+    const page1 = await context1.newPage();
+    await page1.goto('/mypage/login');
+    await page1.waitForLoadState('load');
+    await page1.locator('input[name="login_email"]').fill('playwright@test.test');
+    await page1.locator('input[name="login_pass"]').fill('password');
+    await page1.getByRole('button', { name: 'ログイン' }).click();
+    await page1.waitForLoadState('load');
+
+    // ブラウザ1でカートに商品(チェリーアイスサンド)を入れる
+    await page1.goto('/products/detail/2');
+    await page1.waitForLoadState('load');
+    await page1.locator('#quantity').fill('1');
+    await page1.locator('.add-cart').click();
+    await expect(page1.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await page1.locator('div.ec-modal-box > div > a').click();
+    await page1.waitForLoadState('load');
+    await expect(page1.locator('.ec-cartRow__name').first()).toContainText('チェリーアイスサンド');
+
+    // ブラウザ2(未ログイン)で別の商品(彩のジェラートCUBE)をカートに入れる
+    const context2 = await browser.newContext();
+    const page2 = await context2.newPage();
+    await page2.goto('/products/detail/1');
+    await page2.waitForLoadState('load');
+    await page2.locator('select[name="classcategory_id1"]').selectOption({ label: 'チョコ' });
+    await page2.waitForTimeout(1000);
+    await page2.locator('select[name="classcategory_id2"]').selectOption({ label: '16mm × 16mm' });
+    await page2.locator('#quantity').fill('1');
+    await page2.locator('.add-cart').click();
+    await expect(page2.locator('div.ec-modal-box')).toBeVisible({ timeout: 10_000 });
+    await page2.locator('div.ec-modal-box > div > a').click();
+    await page2.waitForLoadState('load');
+    await expect(page2.locator('.ec-cartRow__name').first()).toContainText('彩のジェラートCUBE');
+
+    // ブラウザ2でログインするとカートがマージされる
+    await page2.goto('/mypage/login');
+    await page2.waitForLoadState('load');
+    await page2.locator('input[name="login_email"]').fill('playwright@test.test');
+    await page2.locator('input[name="login_pass"]').fill('password');
+    await page2.getByRole('button', { name: 'ログイン' }).click();
+    await page2.waitForLoadState('load');
+
+    await page2.goto('/cart');
+    await page2.waitForLoadState('load');
+
+    // マージされて2件あることを確認
+    await expect(page2.locator('ul.ec-cartRow')).toHaveCount(2);
+    const itemNames2 = await page2.locator('.ec-cartRow__name a').allTextContents();
+    expect(itemNames2.some(n => n.includes('彩のジェラートCUBE'))).toBeTruthy();
+    expect(itemNames2.some(n => n.includes('チェリーアイスサンド'))).toBeTruthy();
+
+    // ブラウザ1のカートもマージされている
+    await page1.goto('/cart');
+    await page1.waitForLoadState('load');
+    await expect(page1.locator('ul.ec-cartRow')).toHaveCount(2);
+    const itemNames1 = await page1.locator('.ec-cartRow__name a').allTextContents();
+    expect(itemNames1.some(n => n.includes('彩のジェラートCUBE'))).toBeTruthy();
+    expect(itemNames1.some(n => n.includes('チェリーアイスサンド'))).toBeTruthy();
+
+    // クリーンアップ
+    page1.on('dialog', dialog => dialog.accept());
+    const deleteLinks = page1.locator('.ec-cartRow__delColumn a');
+    while (await deleteLinks.count() > 0) {
+      await deleteLinks.first().click();
+      await page1.waitForLoadState('load');
+    }
+
+    await context1.close();
+    await context2.close();
+  });
+
   test('EF0305-UC01-T01 購入確認画面からカートに戻る', async ({ page }) => {
     // ログインしてカートに商品追加
     await loginAsTestCustomer(page);

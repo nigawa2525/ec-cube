@@ -404,4 +404,167 @@ test.describe('Admin Order (EA04)', () => {
     await page.waitForSelector('#bulkChangeComplete', { state: 'visible', timeout: 30_000 });
     await expect(page.locator('#sentUpdateModal')).toContainText('完了しました');
   });
+
+  test('order_個別出荷済みステータス変更 (EA0405-UC07-T01)', async ({ page }) => {
+    // Create a new order to use for this test
+    await createOrderViaUI(page, '出荷テスト', '太郎');
+
+    // Search for the order
+    await goOrderList(page);
+    await searchOrder(page, '出荷テスト');
+    await expect(page.locator(searchResultMsg)).not.toContainText('検索結果：0件が該当しました');
+
+    // Click the shipped status button on the first row (data-type="status")
+    await page.locator('#search_result > tbody > tr:nth-child(1) a[data-type="status"]').click();
+
+    // Wait for the sentUpdateModal to appear
+    await page.waitForSelector('#sentUpdateModal', { state: 'visible' });
+
+    // Check the notification mail checkbox to send mail
+    const notifMailCheckbox = page.locator('#notificationMail');
+    if (await notifMailCheckbox.count() > 0) {
+      await notifMailCheckbox.click();
+    }
+
+    // Click the bulk change button to execute
+    await page.locator('#bulkChange').scrollIntoViewIfNeeded();
+    await page.locator('#bulkChange').click();
+
+    // Wait for completion
+    await page.waitForSelector('#bulkChangeComplete', { state: 'visible', timeout: 30_000 });
+    await expect(page.locator('#bulkChangeComplete')).toBeVisible();
+  });
+
+  test('order_一括メール通知 (EA0402-UC02-T01)', async ({ page }) => {
+    // Go to order list and search all
+    await goOrderList(page);
+    await searchOrder(page, '');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+    await expect(page.locator(searchResultMsg)).not.toContainText('検索結果：0件が該当しました');
+
+    // Select all orders
+    await page.locator('#toggle_check_all').check();
+    await page.waitForTimeout(500);
+
+    // Click bulk mail send button
+    await page.locator('#bulkSendMail').click();
+
+    // Wait for the sentUpdateModal to appear
+    await page.waitForSelector('#sentUpdateModal', { state: 'visible' });
+
+    // Click the send button
+    await page.locator('#bulkChange').click();
+
+    // Wait for completion
+    await page.waitForSelector('#bulkChangeComplete', { state: 'visible', timeout: 30_000 });
+    await expect(page.locator('#bulkChangeComplete')).toBeVisible();
+  });
+
+  test('order_一括メール通知_キャンセル (EA0402-UC02-T02)', async ({ page }) => {
+    // Go to order list and search all
+    await goOrderList(page);
+    await searchOrder(page, '');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+    await expect(page.locator(searchResultMsg)).not.toContainText('検索結果：0件が該当しました');
+
+    // Select all orders
+    await page.locator('#toggle_check_all').check();
+    await page.waitForTimeout(500);
+
+    // Click bulk mail send button
+    await page.locator('#bulkSendMail').click();
+
+    // Wait for the sentUpdateModal to appear
+    await page.waitForSelector('#sentUpdateModal', { state: 'visible' });
+    await page.waitForTimeout(500);
+
+    // Click cancel button instead of send
+    await page.locator('.modal.show .btn-ec-sub').click();
+
+    // Verify the modal is closed
+    await expect(page.locator('#sentUpdateModal')).not.toBeVisible({ timeout: 10_000 });
+
+    // Verify we are still on the order list page (no mail was sent)
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+  });
+
+  test('order_納品書の出力 (EA0405-UC06-T02)', async ({ page }) => {
+    // Go to order list and search all
+    await goOrderList(page);
+    await searchOrder(page, '');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+    await expect(page.locator(searchResultMsg)).not.toContainText('検索結果：0件が該当しました');
+
+    // Select all orders via the bulk form checkbox
+    await page.locator('#form_bulk #toggle_check_all').check();
+    await page.waitForTimeout(500);
+
+    // Click the PDF export button - opens in a new window
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.locator('#form_bulk #bulkExportPdf').click(),
+    ]);
+
+    await popup.waitForLoadState('load');
+
+    // Verify we are on the PDF form page
+    await expect(popup.locator('.c-pageTitle')).toContainText('納品書出力');
+
+    // Click the download/export button
+    const [download] = await Promise.all([
+      popup.waitForEvent('download'),
+      popup.locator('.btn-ec-conversion').click(),
+    ]);
+
+    expect(download.suggestedFilename()).toMatch(/nouhinsyo\.pdf$/);
+
+    await popup.close();
+  });
+
+  test('order_納品書の一括出力 (EA0405-UC06-T03)', async ({ page }) => {
+    // Go to order list and search all
+    await goOrderList(page);
+    await searchOrder(page, '');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+    await expect(page.locator(searchResultMsg)).not.toContainText('検索結果：0件が該当しました');
+
+    // Select all orders via the bulk form checkbox
+    await page.locator('#form_bulk #toggle_check_all').check();
+    await page.waitForTimeout(500);
+
+    // Scroll to top to ensure the button is visible
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+
+    // Click the PDF export button - opens in a new window
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.locator('#form_bulk #bulkExportPdf').click(),
+    ]);
+
+    await popup.waitForLoadState('load');
+
+    // Verify we are on the PDF form page
+    await expect(popup.locator('.c-pageTitle')).toContainText('納品書出力');
+
+    // Fill in notes
+    await popup.locator('#order_pdf_note1').fill('Test note first');
+    await popup.locator('#order_pdf_note2').fill('Test note second');
+    await popup.locator('#order_pdf_note3').fill('Test note third');
+
+    // Check the default checkbox
+    await popup.locator('#order_pdf_default').scrollIntoViewIfNeeded();
+    await popup.waitForTimeout(500);
+    await popup.locator('#order_pdf_default').click();
+
+    // Click the download/export button
+    const [download] = await Promise.all([
+      popup.waitForEvent('download'),
+      popup.locator('#order_pdf_form .c-conversionArea .justify-content-end button.btn-ec-conversion').click(),
+    ]);
+
+    expect(download.suggestedFilename()).toMatch(/nouhinsyo\.pdf$/);
+
+    await popup.close();
+  });
 });

@@ -625,3 +625,39 @@ test.describe.serial('Maintenance management', () => {
     await expect(page.locator('.ec-maintenanceAlert')).not.toBeVisible();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Layout editor - unused block search
+// ---------------------------------------------------------------------------
+test.describe('Layout editor - unused block search', () => {
+  test('contentsmanagement_検索未使用ブロック - EA0605-UC01-T04', async ({ page }) => {
+    // Navigate to layout management and edit the 下層ページ用レイアウト layout
+    await page.goto(`/${adminRoute}/content/layout`);
+    await page.waitForLoadState('load');
+
+    // Click on the layout named 下層ページ用レイアウト
+    await page.locator('a:has-text("下層ページ用レイアウト")').first().click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-pageTitle')).toContainText('レイアウト管理');
+
+    // Count all unused block items before search
+    const initialCount = await page.locator('#unused-block div.sort').count();
+    expect(initialCount).toBeGreaterThan(0);
+
+    // Search for 'トピック' in unused block search box
+    await page.locator('#search-block').fill('トピック');
+    await page.waitForTimeout(500);
+
+    // Only matching blocks should be visible
+    const visibleBlocks = page.locator('#unused-block div.sort:visible');
+    const filteredCount = await visibleBlocks.count();
+    expect(filteredCount).toBe(1);
+
+    // Clear the search to restore all blocks
+    await page.locator('#search-block').fill('');
+    await page.waitForTimeout(500);
+
+    const restoredCount = await page.locator('#unused-block div.sort:visible').count();
+    expect(restoredCount).toBe(initialCount);
+  });
+});

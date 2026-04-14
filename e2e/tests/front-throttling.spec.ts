@@ -479,6 +479,443 @@ test.describe('Throttling (EF09)', () => {
     );
   });
 
+  // --- Order confirm: guest purchase (25 attempts, shopping_confirm limiter) ---
+  // TODO: These throttling tests require full shopping flow (add to cart -> checkout -> confirm).
+  // They are complex and slow due to the number of iterations required.
+  test.fixme('注文確認_非会員購入', async ({ page }) => {
+    // EF0901-UC01-T08: Guest purchase confirm throttling
+    // Requires 25 iterations of: add to cart -> checkout -> guest info -> confirm -> complete
+    // Then one more to trigger throttle on the confirm step
+    test.setTimeout(600_000);
+
+    for (let i = 0; i < 25; i++) {
+      await page.goto('/products/detail/2');
+      await page.waitForLoadState('load');
+      await page.locator('#quantity').fill('1');
+      await page.locator('.add-cart').click();
+      await page.waitForTimeout(3000);
+      await page.locator('div.ec-modal-box > div > a').click();
+      await page.waitForLoadState('load');
+
+      await page.goto('/cart');
+      await page.waitForLoadState('load');
+      await page.getByRole('link', { name: 'レジに進む' }).click();
+      await page.waitForLoadState('load');
+
+      // Guest purchase
+      await page.locator('a[href*="shopping/nonmember"]').click();
+      await page.waitForLoadState('load');
+
+      // Fill guest info
+      await page.locator('#nonmember_name_name01').fill('姓03');
+      await page.locator('#nonmember_name_name02').fill('名03');
+      await page.locator('#nonmember_kana_kana01').fill('セイ');
+      await page.locator('#nonmember_kana_kana02').fill('メイ');
+      await page.locator('#nonmember_postal_code').fill('530-0001');
+      await page.locator('#nonmember_address_pref').selectOption({ value: '27' });
+      await page.waitForTimeout(500);
+      await page.locator('#nonmember_address_addr01').fill('大阪市北区');
+      await page.locator('#nonmember_address_addr02').fill('梅田2-4-9');
+      await page.locator('#nonmember_phone_number').fill('111-111-111');
+      await page.locator('#nonmember_email_first').fill('test@example.com');
+      await page.locator('#nonmember_email_second').fill('test@example.com');
+      await page.locator('button[type="submit"]').click();
+      await page.waitForLoadState('load');
+
+      // Confirm
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+
+      // Complete
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+      await expect(page.locator('div.ec-pageHeader h1')).toContainText('ご注文完了');
+    }
+
+    // Trigger throttle on confirm step
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await page.waitForTimeout(3000);
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    await page.goto('/cart');
+    await page.waitForLoadState('load');
+    await page.getByRole('link', { name: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    await page.locator('a[href*="shopping/nonmember"]').click();
+    await page.waitForLoadState('load');
+    await page.locator('#nonmember_name_name01').fill('姓03');
+    await page.locator('#nonmember_name_name02').fill('名03');
+    await page.locator('#nonmember_kana_kana01').fill('セイ');
+    await page.locator('#nonmember_kana_kana02').fill('メイ');
+    await page.locator('#nonmember_postal_code').fill('530-0001');
+    await page.locator('#nonmember_address_pref').selectOption({ value: '27' });
+    await page.waitForTimeout(500);
+    await page.locator('#nonmember_address_addr01').fill('大阪市北区');
+    await page.locator('#nonmember_address_addr02').fill('梅田2-4-9');
+    await page.locator('#nonmember_phone_number').fill('111-111-111');
+    await page.locator('#nonmember_email_first').fill('test@example.com');
+    await page.locator('#nonmember_email_second').fill('test@example.com');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#shopping-form button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('p.ec-reportDescription')).toContainText(
+      '試行回数の上限を超過しました。しばらくお待ちいただき、再度お試しください。'
+    );
+  });
+
+  // --- Order confirm: member purchase (10 attempts, shopping_confirm limiter) ---
+  test.fixme('注文確認_会員購入', async ({ page }) => {
+    // EF0901-UC01-T09: Member purchase confirm throttling
+    // Requires 10 iterations of: add to cart -> checkout -> confirm -> complete
+    // Then one more to trigger throttle on the confirm step
+    test.setTimeout(300_000);
+
+    const email = getTestCustomerEmail();
+    await loginAsMember(page, email);
+
+    for (let i = 0; i < 10; i++) {
+      await page.goto('/products/detail/2');
+      await page.waitForLoadState('load');
+      await page.locator('#quantity').fill('1');
+      await page.locator('.add-cart').click();
+      await page.waitForTimeout(3000);
+      await page.locator('div.ec-modal-box > div > a').click();
+      await page.waitForLoadState('load');
+
+      await page.goto('/cart');
+      await page.waitForLoadState('load');
+      await page.getByRole('link', { name: 'レジに進む' }).click();
+      await page.waitForLoadState('load');
+
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+      await expect(page.locator('div.ec-pageHeader h1')).toContainText('ご注文完了');
+    }
+
+    // Trigger throttle
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await page.waitForTimeout(3000);
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    await page.goto('/cart');
+    await page.waitForLoadState('load');
+    await page.getByRole('link', { name: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#shopping-form button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('p.ec-reportDescription')).toContainText(
+      '試行回数の上限を超過しました。しばらくお待ちいただき、再度お試しください。'
+    );
+  });
+
+  // --- Order checkout: guest purchase (25 attempts, shopping_checkout limiter) ---
+  // Note: confirmLimiter upper limit needs to be increased before running this test
+  test.fixme('注文完了_非会員購入', async ({ page }) => {
+    // EF0901-UC01-T10: Guest purchase checkout throttling
+    test.setTimeout(600_000);
+
+    for (let i = 0; i < 25; i++) {
+      await page.goto('/products/detail/2');
+      await page.waitForLoadState('load');
+      await page.locator('#quantity').fill('1');
+      await page.locator('.add-cart').click();
+      await page.waitForTimeout(3000);
+      await page.locator('div.ec-modal-box > div > a').click();
+      await page.waitForLoadState('load');
+
+      await page.goto('/cart');
+      await page.waitForLoadState('load');
+      await page.getByRole('link', { name: 'レジに進む' }).click();
+      await page.waitForLoadState('load');
+
+      await page.locator('a[href*="shopping/nonmember"]').click();
+      await page.waitForLoadState('load');
+      await page.locator('#nonmember_name_name01').fill('姓03');
+      await page.locator('#nonmember_name_name02').fill('名03');
+      await page.locator('#nonmember_kana_kana01').fill('セイ');
+      await page.locator('#nonmember_kana_kana02').fill('メイ');
+      await page.locator('#nonmember_postal_code').fill('530-0001');
+      await page.locator('#nonmember_address_pref').selectOption({ value: '27' });
+      await page.waitForTimeout(500);
+      await page.locator('#nonmember_address_addr01').fill('大阪市北区');
+      await page.locator('#nonmember_address_addr02').fill('梅田2-4-9');
+      await page.locator('#nonmember_phone_number').fill('111-111-111');
+      await page.locator('#nonmember_email_first').fill('test@example.com');
+      await page.locator('#nonmember_email_second').fill('test@example.com');
+      await page.locator('button[type="submit"]').click();
+      await page.waitForLoadState('load');
+
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+      await expect(page.locator('div.ec-pageHeader h1')).toContainText('ご注文完了');
+    }
+
+    // Trigger throttle on checkout
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await page.waitForTimeout(3000);
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    await page.goto('/cart');
+    await page.waitForLoadState('load');
+    await page.getByRole('link', { name: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    await page.locator('a[href*="shopping/nonmember"]').click();
+    await page.waitForLoadState('load');
+    await page.locator('#nonmember_name_name01').fill('姓03');
+    await page.locator('#nonmember_name_name02').fill('名03');
+    await page.locator('#nonmember_kana_kana01').fill('セイ');
+    await page.locator('#nonmember_kana_kana02').fill('メイ');
+    await page.locator('#nonmember_postal_code').fill('530-0001');
+    await page.locator('#nonmember_address_pref').selectOption({ value: '27' });
+    await page.waitForTimeout(500);
+    await page.locator('#nonmember_address_addr01').fill('大阪市北区');
+    await page.locator('#nonmember_address_addr02').fill('梅田2-4-9');
+    await page.locator('#nonmember_phone_number').fill('111-111-111');
+    await page.locator('#nonmember_email_first').fill('test@example.com');
+    await page.locator('#nonmember_email_second').fill('test@example.com');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#shopping-form button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#shopping-form button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('div.ec-cartRole__error')).toContainText(
+      '購入処理で予期しないエラーが発生しました'
+    );
+  });
+
+  // --- Order checkout: member purchase (10 attempts, shopping_checkout limiter) ---
+  // Note: confirmLimiter upper limit needs to be increased before running this test
+  test.fixme('注文完了_会員購入', async ({ page }) => {
+    // EF0901-UC01-T11: Member purchase checkout throttling
+    test.setTimeout(300_000);
+
+    const email = getTestCustomerEmail();
+    await loginAsMember(page, email);
+
+    for (let i = 0; i < 10; i++) {
+      await page.goto('/products/detail/2');
+      await page.waitForLoadState('load');
+      await page.locator('#quantity').fill('1');
+      await page.locator('.add-cart').click();
+      await page.waitForTimeout(3000);
+      await page.locator('div.ec-modal-box > div > a').click();
+      await page.waitForLoadState('load');
+
+      await page.goto('/cart');
+      await page.waitForLoadState('load');
+      await page.getByRole('link', { name: 'レジに進む' }).click();
+      await page.waitForLoadState('load');
+
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+
+      await page.locator('#shopping-form button.ec-blockBtn--action').click();
+      await page.waitForLoadState('load');
+      await expect(page.locator('div.ec-pageHeader h1')).toContainText('ご注文完了');
+    }
+
+    // Trigger throttle
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await page.waitForTimeout(3000);
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    await page.goto('/cart');
+    await page.waitForLoadState('load');
+    await page.getByRole('link', { name: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#shopping-form button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#shopping-form button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('div.ec-cartRole__error')).toContainText(
+      '購入処理で予期しないエラーが発生しました'
+    );
+  });
+
+  // --- Order flow: add delivery address (10 additions in order flow) ---
+  test.fixme('order_お届け先追加', async ({ page }) => {
+    // EF0901-UC01-T16: Add delivery address during order flow throttling
+    // This requires login, adding to cart, going through checkout,
+    // then repeatedly adding delivery addresses in the multiple shipping page
+    test.setTimeout(300_000);
+
+    const email = getTestCustomerEmail();
+    await loginAsMember(page, email);
+
+    // Add product to cart
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await page.waitForTimeout(3000);
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // Go to checkout
+    await page.goto('/cart');
+    await page.waitForLoadState('load');
+    await page.getByRole('link', { name: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    // Go to multiple shipping / add delivery address page
+    // Click 'お届け先を追加' link
+    const addDeliveryLink = page.locator('a[href*="shopping/shipping_multiple"]');
+    if (await addDeliveryLink.count() === 0) {
+      test.skip(true, 'Multiple shipping link not found on shopping page');
+      return;
+    }
+    await addDeliveryLink.click();
+    await page.waitForLoadState('load');
+
+    for (let i = 0; i < 10; i++) {
+      // Click add new delivery address
+      await page.locator('a[href*="shopping/shipping_multiple_edit"]').click();
+      await page.waitForLoadState('load');
+
+      // Fill address form
+      await page.locator('#customer_address_name_name01').fill('あいおい0302');
+      await page.locator('#customer_address_name_name02').fill('名0302');
+      await page.locator('#customer_address_kana_kana01').fill('セイ');
+      await page.locator('#customer_address_kana_kana02').fill('メイ');
+      await page.locator('#customer_address_postal_code').fill('530-0001');
+      await page.locator('#customer_address_address_pref').selectOption({ value: '27' });
+      await page.waitForTimeout(500);
+      await page.locator('#customer_address_address_addr01').fill('大阪市北区2');
+      await page.locator('#customer_address_address_addr02').fill('梅田2-4-9 ブリーゼタワー13F2');
+      await page.locator('#customer_address_phone_number').fill('222-222-222');
+      await page.locator('button[type="submit"]').click();
+      await page.waitForLoadState('load');
+      await page.waitForTimeout(1000);
+    }
+
+    // Trigger throttle
+    await page.locator('a[href*="shopping/shipping_multiple_edit"]').click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#customer_address_name_name01').fill('あいおい0302');
+    await page.locator('#customer_address_name_name02').fill('名0302');
+    await page.locator('#customer_address_kana_kana01').fill('セイ');
+    await page.locator('#customer_address_kana_kana02').fill('メイ');
+    await page.locator('#customer_address_postal_code').fill('530-0001');
+    await page.locator('#customer_address_address_pref').selectOption({ value: '27' });
+    await page.waitForTimeout(500);
+    await page.locator('#customer_address_address_addr01').fill('大阪市北区2');
+    await page.locator('#customer_address_address_addr02').fill('梅田2-4-9 ブリーゼタワー13F2');
+    await page.locator('#customer_address_phone_number').fill('222-222-222');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    await expect(page.locator('p.ec-reportDescription')).toContainText(
+      '試行回数の上限を超過しました。しばらくお待ちいただき、再度お試しください。'
+    );
+  });
+
+  // --- Order flow: change delivery address (10 changes in order flow) ---
+  test.fixme('order_お届け先変更', async ({ page }) => {
+    // EF0901-UC01-T17: Change delivery address during order flow throttling
+    // Requires login, adding to cart, going through checkout,
+    // then repeatedly changing the delivery address
+    test.setTimeout(300_000);
+
+    const email = getTestCustomerEmail();
+    await loginAsMember(page, email);
+
+    // Add product to cart
+    await page.goto('/products/detail/2');
+    await page.waitForLoadState('load');
+    await page.locator('#quantity').fill('1');
+    await page.locator('.add-cart').click();
+    await page.waitForTimeout(3000);
+    await page.locator('div.ec-modal-box > div > a').click();
+    await page.waitForLoadState('load');
+
+    // Go to checkout
+    await page.goto('/cart');
+    await page.waitForLoadState('load');
+    await page.getByRole('link', { name: 'レジに進む' }).click();
+    await page.waitForLoadState('load');
+
+    for (let i = 0; i < 10; i++) {
+      // Click 'お届け先を変更' link
+      const changeDeliveryLink = page.locator('a[href*="shopping/shipping_change"]').first();
+      if (await changeDeliveryLink.count() === 0) {
+        test.skip(true, 'Shipping change link not found on shopping page');
+        return;
+      }
+      await changeDeliveryLink.click();
+      await page.waitForLoadState('load');
+
+      // Fill new delivery address form
+      await page.locator('#customer_address_name_name01').fill('あいおい0302');
+      await page.locator('#customer_address_name_name02').fill('名0302');
+      await page.locator('#customer_address_kana_kana01').fill('セイ');
+      await page.locator('#customer_address_kana_kana02').fill('メイ');
+      await page.locator('#customer_address_postal_code').fill('530-0001');
+      await page.locator('#customer_address_address_pref').selectOption({ value: '27' });
+      await page.waitForTimeout(500);
+      await page.locator('#customer_address_address_addr01').fill('大阪市北区2');
+      await page.locator('#customer_address_address_addr02').fill('梅田2-4-9 ブリーゼタワー13F2');
+      await page.locator('#customer_address_phone_number').fill('222-222-222');
+      await page.locator('button[type="submit"]').click();
+      await page.waitForLoadState('load');
+      await page.waitForTimeout(1000);
+    }
+
+    // Trigger throttle
+    const changeDeliveryLink = page.locator('a[href*="shopping/shipping_change"]').first();
+    await changeDeliveryLink.click();
+    await page.waitForLoadState('load');
+
+    await page.locator('#customer_address_name_name01').fill('あいおい0302');
+    await page.locator('#customer_address_name_name02').fill('名0302');
+    await page.locator('#customer_address_kana_kana01').fill('セイ');
+    await page.locator('#customer_address_kana_kana02').fill('メイ');
+    await page.locator('#customer_address_postal_code').fill('530-0001');
+    await page.locator('#customer_address_address_pref').selectOption({ value: '27' });
+    await page.waitForTimeout(500);
+    await page.locator('#customer_address_address_addr01').fill('大阪市北区2');
+    await page.locator('#customer_address_address_addr02').fill('梅田2-4-9 ブリーゼタワー13F2');
+    await page.locator('#customer_address_phone_number').fill('222-222-222');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    await expect(page.locator('p.ec-reportDescription')).toContainText(
+      '試行回数の上限を超過しました。しばらくお待ちいただき、再度お試しください。'
+    );
+  });
+
   // --- Admin 2FA throttling ---
   test('管理画面二段階認証', async ({ page }) => {
     test.setTimeout(180_000);

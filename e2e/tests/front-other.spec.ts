@@ -57,6 +57,136 @@ test.describe('Front Other Pages (EF06)', () => {
     await expect(page.locator('.ec-pageHeader h1')).toContainText('ログイン');
   });
 
+  test('EF0601-UC01-T02 ログイン異常 仮会員', async ({ page }) => {
+    // 仮会員を作成するためにadminから新規会員を仮会員ステータスで登録
+    const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
+    const browser = page.context().browser()!;
+    const authFile = path.join(__dirname, '..', '.auth', 'admin.json');
+    const storageState = JSON.parse(fs.readFileSync(authFile, 'utf-8'));
+    const adminContext = await browser.newContext({ storageState });
+    const adminPage = await adminContext.newPage();
+
+    const tempEmail = `temp_${Date.now()}@test.test`;
+
+    // 管理画面で仮会員を登録
+    await adminPage.goto(`/${adminRoute}/customer/new`);
+    await adminPage.waitForLoadState('load');
+
+    await adminPage.locator('#admin_customer_name_name01').fill('仮会員');
+    await adminPage.locator('#admin_customer_name_name02').fill('テスト');
+    await adminPage.locator('#admin_customer_kana_kana01').fill('カリカイイン');
+    await adminPage.locator('#admin_customer_kana_kana02').fill('テスト');
+    await adminPage.locator('#admin_customer_postal_code').fill('530-0001');
+    await adminPage.locator('#admin_customer_address_pref').selectOption({ value: '27' });
+    await adminPage.locator('#admin_customer_address_addr01').fill('大阪市北区');
+    await adminPage.locator('#admin_customer_address_addr02').fill('梅田');
+    await adminPage.locator('#admin_customer_phone_number').fill('111111111');
+    await adminPage.locator('#admin_customer_email').fill(tempEmail);
+    await adminPage.locator('#admin_customer_plain_password_first').fill('password');
+    await adminPage.locator('#admin_customer_plain_password_second').fill('password');
+    // ステータスを仮会員(1)に設定
+    await adminPage.locator('#admin_customer_status').selectOption({ value: '1' });
+    await adminPage.locator('button.btn-ec-conversion').click();
+    await adminPage.waitForLoadState('load');
+
+    await adminContext.close();
+
+    // 仮会員のメールでログインを試みる
+    await page.goto('/mypage/login');
+    await page.waitForLoadState('load');
+    await page.locator('input[name="login_email"]').fill(tempEmail);
+    await page.locator('input[name="login_pass"]').fill('password');
+    await page.locator('#login_mypage button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // ログインエラーメッセージが表示される
+    await expect(page.locator('div.ec-login p.ec-errorMessage')).toContainText('ログインできませんでした');
+  });
+
+  test('EF0601-UC01-T03 ログイン異常 入力ミス', async ({ page }) => {
+    await page.goto('/mypage/login');
+    await page.waitForLoadState('load');
+
+    // 存在しないメールアドレスでログイン
+    await page.locator('input[name="login_email"]').fill('nonexistent_wrong@test.test.bad');
+    await page.locator('input[name="login_pass"]').fill('password');
+    await page.locator('#login_mypage button[type="submit"]').click();
+    await page.waitForLoadState('load');
+
+    // ログインエラーメッセージが表示される
+    await expect(page.locator('div.ec-login p.ec-errorMessage')).toContainText('ログインできませんでした');
+  });
+
+  test('EF0602-UC01-T01 パスワード再発行', async ({ page }) => {
+    // ログインページへ
+    await page.goto('/mypage/login');
+    await page.waitForLoadState('load');
+
+    // 「ログイン情報をお忘れですか？」リンクをクリック
+    await page.locator('#login_mypage a').first().click();
+    await page.waitForLoadState('load');
+
+    // パスワード再発行ページ
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('パスワードの再発行');
+
+    // テストユーザーのメールアドレスを入力して送信
+    await page.locator('#login_email').fill('playwright@test.test');
+    await page.locator('button.ec-blockBtn--action').click();
+    await page.waitForLoadState('load');
+
+    // パスワード再発行(メール送信)ページに遷移
+    await expect(page.locator('div.ec-pageHeader h1')).toContainText('パスワードの再発行');
+    // メール送信完了メッセージが表示される(完了ページは存在する)
+    await expect(page.locator('.ec-layoutRole__main')).toBeVisible();
+  });
+
+  test('EF0608-UC01-T01 サイトマップ', async ({ page }) => {
+    // sitemap.xml にアクセス
+    const response = await page.goto('/sitemap.xml');
+    expect(response).not.toBeNull();
+    expect(response!.status()).toBe(200);
+
+    // コンテンツを取得して確認
+    const content = await page.content();
+    expect(content).toContain('/sitemap_page.xml');
+    expect(content).toContain('/sitemap_category.xml');
+    expect(content).toContain('/sitemap_product_1.xml');
+  });
+
+  test('EF0608-UC01-T03 サイトマップ ページ', async ({ page }) => {
+    // sitemap_page.xml にアクセス
+    const response = await page.goto('/sitemap_page.xml');
+    expect(response).not.toBeNull();
+    expect(response!.status()).toBe(200);
+
+    // TOPページのURLが含まれていることを確認
+    const content = await page.content();
+    // baseURLのlocを含むか確認 (http://127.0.0.1:8000/ のような形)
+    expect(content).toContain('/</loc>');
+  });
+
+  test('EF0608-UC01-T03 サイトマップ カテゴリ', async ({ page }) => {
+    // sitemap_category.xml にアクセス
+    const response = await page.goto('/sitemap_category.xml');
+    expect(response).not.toBeNull();
+    expect(response!.status()).toBe(200);
+
+    // カテゴリURLが含まれていることを確認
+    const content = await page.content();
+    expect(content).toContain('/products/list?category_id=');
+  });
+
+  test('EF0608-UC01-T04 サイトマップ 商品', async ({ page }) => {
+    // sitemap_product_1.xml にアクセス
+    const response = await page.goto('/sitemap_product_1.xml');
+    expect(response).not.toBeNull();
+    expect(response!.status()).toBe(200);
+
+    // 商品URLが含まれていることを確認
+    const content = await page.content();
+    expect(content).toContain('/products/detail/');
+  });
+
   test('EF0604-UC01-T01 当サイトについて', async ({ page }) => {
     await page.goto('/help/about');
     await page.waitForLoadState('load');

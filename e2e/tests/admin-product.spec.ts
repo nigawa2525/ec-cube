@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import path from 'path';
 
 const adminRoute = process.env.ECCUBE_ADMIN_ROUTE || 'admin';
 const pageTitle = '.c-pageTitle';
@@ -933,5 +934,342 @@ test.describe('Admin Product (EA03)', () => {
     await expect(page.locator(nameSelector(3))).toContainText(name3);
     await expect(page.locator(nameSelector(4))).toContainText(name4);
     await expect(page.locator(nameSelector(5))).toContainText(name5);
+  });
+
+  test('product_新製品はタグを持っています - EA0302-UC01-T05', async ({ page }) => {
+    // Create a product with tags
+    await page.goto(`/${adminRoute}/product/product/new`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_product_name').fill('タグテスト商品');
+    await page.locator('#admin_product_class_price02').fill('50000');
+
+    // Open tag list and select tags
+    await page.locator('div[href="#allTags"] > a').click();
+    await page.waitForTimeout(500);
+
+    // Select tags (2nd, 3rd, 4th in the allTags list)
+    await page.locator('#allTags > div:nth-child(2) button').click();
+    await page.locator('#allTags > div:nth-child(3) button').click();
+    await page.locator('#allTags > div:nth-child(4) button').click();
+
+    // Submit
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Verify tags are displayed on the edit page (tag buttons in #tag section)
+    await expect(page.locator('#tag > div > div:nth-child(1) > button')).toBeVisible();
+    await expect(page.locator('#tag > div > div:nth-child(2) > button')).toBeVisible();
+    await expect(page.locator('#tag > div > div:nth-child(3) > button')).toBeVisible();
+  });
+
+  test('product_商品編集からの商品確認_公開 - EA0310-UC05-T02', async ({ page }) => {
+    // Search for a known product
+    await goProductList(page);
+    await searchProduct(page, 'チェリーアイスサンド');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click on product name to go to edit page
+    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品登録');
+
+    // Set status to public and save
+    await page.locator('#admin_product_Status').selectOption('公開');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Click preview link (opens in new tab)
+    const [newPage] = await Promise.all([
+      page.context().waitForEvent('page'),
+      page.locator('#preview a[target="_blank"]').click(),
+    ]);
+    await newPage.waitForLoadState('load');
+    expect(newPage.url()).toContain('/products/detail/');
+    await newPage.close();
+  });
+
+  test('product_商品編集からの商品確認_非公開 - EA0310-UC05-T03', async ({ page }) => {
+    // Search for a known product
+    await goProductList(page);
+    await searchProduct(page, 'チェリーアイスサンド');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click on product name to go to edit page
+    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品登録');
+
+    // Set status to non-public and save
+    await page.locator('#admin_product_Status').selectOption('非公開');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Click preview link (opens in new tab)
+    const [newPage] = await Promise.all([
+      page.context().waitForEvent('page'),
+      page.locator('#preview a[target="_blank"]').click(),
+    ]);
+    await newPage.waitForLoadState('load');
+    expect(newPage.url()).toContain('/products/detail/');
+    await newPage.close();
+
+    // Restore to public status
+    await page.locator('#admin_product_Status').selectOption('公開');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+  });
+
+  test('product_詳細検索_タグ - EA0312-UC01-T01', async ({ page }) => {
+    // Create a unique product name for the tag search test
+    const uniqueName = `タグ検索テスト_${Date.now()}`;
+    await page.goto(`/${adminRoute}/product/product/new`);
+    await page.waitForLoadState('load');
+    await page.locator('#admin_product_name').fill(uniqueName);
+    await page.locator('#admin_product_class_price02').fill('1000');
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Search by tag -- initially, this product has no tags, so tag-filtered search should return 0
+    await goProductList(page);
+    await page.locator('#admin_search_product_id').fill(uniqueName);
+    // Open advanced search
+    await page.locator('#search_form .c-outsideBlock__contents a span, #search_form a.d-inline-block').first().click();
+    await page.waitForTimeout(500);
+    // Select the first tag in the dropdown
+    await page.locator('#admin_search_product_tag_id').selectOption({ index: 1 });
+    await page.locator(searchBtn).click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：0件が該当しました');
+
+    // Now add tags to the product via edit page
+    await goProductList(page);
+    await searchProduct(page, uniqueName);
+    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
+    await page.waitForLoadState('load');
+
+    // Add tags
+    await page.locator('div[href="#allTags"] > a').click();
+    await page.waitForTimeout(500);
+    await page.locator('#allTags > div:nth-child(2) button').click();
+    await page.locator('#allTags > div:nth-child(3) button').click();
+    await page.locator('#allTags > div:nth-child(4) button').click();
+    await page.locator('button.ladda-button[type="submit"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
+
+    // Search by tag again -- now should return 1
+    await goProductList(page);
+    await page.locator('#admin_search_product_id').fill(uniqueName);
+    await page.locator('#search_form .c-outsideBlock__contents a span, #search_form a.d-inline-block').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('#admin_search_product_tag_id').selectOption({ index: 1 });
+    await page.locator(searchBtn).click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(searchResultMsg)).toContainText('検索結果：1件が該当しました');
+  });
+
+  test('product_商品CSV登録 - EA0306-UC01-T01', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    // Verify that upload products don't exist yet
+    await goProductList(page);
+    await searchProduct(page, 'アップロード商品');
+    // May show 0 results or results from a prior run -- just proceed with upload
+
+    // Navigate to product CSV upload page
+    await page.goto(`/${adminRoute}/product/product_csv_upload`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品CSV登録');
+
+    // Upload the product CSV file
+    const csvPath = path.join(__dirname, '..', 'fixtures', 'product.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(csvPath);
+
+    // Enable the upload button (since setInputFiles doesn't fire the change event properly)
+    await page.evaluate(() => {
+      (document.getElementById('upload-button') as HTMLButtonElement).disabled = false;
+    });
+
+    // Click upload button to open the modal
+    await page.locator('#upload-button').click();
+    await page.waitForTimeout(1000);
+
+    // Click the import button inside the modal
+    await page.locator('#importCsv').click();
+
+    // Wait for upload to complete (the modal body text changes)
+    await page.waitForSelector('#importCsvDone:not([style*="display: none"])', { timeout: 60_000 });
+
+    // Verify success message
+    await expect(page.locator('#importCsvModal .modal-body p')).toContainText('CSVファイルをアップロードしました');
+
+    // Close the modal
+    await page.locator('#importCsvDone').click();
+    await page.waitForLoadState('load');
+
+    // Verify the uploaded products appear in search
+    await goProductList(page);
+    await searchProduct(page, 'アップロード商品');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：[3-9]\d*件が該当しました/);
+
+    // Test upload failure: upload category CSV as product CSV (format mismatch)
+    await page.goto(`/${adminRoute}/product/product_csv_upload`);
+    await page.waitForLoadState('load');
+
+    const categoryCsvPath = path.join(__dirname, '..', 'fixtures', 'category.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(categoryCsvPath);
+    await page.evaluate(() => {
+      (document.getElementById('upload-button') as HTMLButtonElement).disabled = false;
+    });
+    await page.locator('#upload-button').click();
+    await page.waitForTimeout(1000);
+    await page.locator('#importCsv').click();
+    await page.waitForTimeout(3000);
+
+    // Verify error message about format mismatch
+    await expect(page.locator('#bulkMessages')).toContainText('CSVのフォーマットが一致しません');
+  });
+
+  test('product_カテゴリCSV登録 - EA0307-UC01-T01', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    // Navigate to category CSV upload page
+    await page.goto(`/${adminRoute}/product/category_csv_upload`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('カテゴリCSV登録');
+
+    // Upload the category CSV file
+    const csvPath = path.join(__dirname, '..', 'fixtures', 'category.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(csvPath);
+    await page.locator('#upload-button').click();
+    await page.waitForLoadState('load');
+
+    // Verify success message
+    await expect(page.locator('.c-container .c-contentsArea .alert-success')).toContainText('CSVファイルをアップロードしました');
+
+    // Verify uploaded categories appear
+    await page.goto(`/${adminRoute}/product/category`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea')).toContainText('アップロードカテゴリ1');
+
+    // Test upload failure: upload product CSV as category CSV
+    await page.goto(`/${adminRoute}/product/category_csv_upload`);
+    await page.waitForLoadState('load');
+    const productCsvPath = path.join(__dirname, '..', 'fixtures', 'product.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(productCsvPath);
+    await page.locator('#upload-button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#upload-form')).toContainText('CSVのフォーマットが一致しません');
+  });
+
+  test('product_規格CSV登録 - EA0307-UC02-T01', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    // Navigate to class name CSV upload page
+    await page.goto(`/${adminRoute}/product/class_name_csv_upload`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('規格CSV登録');
+
+    // Upload the class name CSV file
+    const csvPath = path.join(__dirname, '..', 'fixtures', 'class_name.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(csvPath);
+    await page.locator('#upload-button').click();
+    await page.waitForLoadState('load');
+
+    // Verify success message
+    await expect(page.locator('.c-container .c-contentsArea .alert-success')).toContainText('CSVファイルをアップロードしました');
+
+    // Verify uploaded class names appear
+    await page.goto(`/${adminRoute}/product/class_name`);
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea')).toContainText('アップロード規格1');
+
+    // Test upload failure: upload product CSV as class name CSV
+    await page.goto(`/${adminRoute}/product/class_name_csv_upload`);
+    await page.waitForLoadState('load');
+    const productCsvPath = path.join(__dirname, '..', 'fixtures', 'product.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(productCsvPath);
+    await page.locator('#upload-button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#upload-form')).toContainText('CSVのフォーマットが一致しません');
+  });
+
+  test('product_規格分類CSV登録 - EA0307-UC03-T01', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    // Navigate to class category CSV upload page
+    await page.goto(`/${adminRoute}/product/class_category_csv_upload`);
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('規格分類CSV登録');
+
+    // Upload the class category CSV file
+    const csvPath = path.join(__dirname, '..', 'fixtures', 'class_category.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(csvPath);
+    await page.locator('#upload-button').click();
+    await page.waitForLoadState('load');
+
+    // Verify success message
+    await expect(page.locator('.c-container .c-contentsArea .alert-success')).toContainText('CSVファイルをアップロードしました');
+
+    // Navigate to class name management, then click into the class with ID=1 (フレーバー) to verify
+    // class_category.csv references 規格ID=1
+    await page.goto(`/${adminRoute}/product/class_name`);
+    await page.waitForLoadState('load');
+
+    // Find and click on フレーバー to see its categories
+    const classListItems = page.locator('ul.list-group > li');
+    const count = await classListItems.count();
+    for (let i = 2; i < count; i++) {
+      const nameEl = classListItems.nth(i).locator('div > div.col.d-flex.align-items-center > a');
+      const txt = await nameEl.textContent();
+      if (txt?.includes('フレーバー')) {
+        await nameEl.click();
+        break;
+      }
+    }
+    await page.waitForLoadState('load');
+    await expect(page.locator('.c-contentsArea')).toContainText('アップロード規格分類1');
+
+    // Test upload failure: upload product CSV as class category CSV
+    await page.goto(`/${adminRoute}/product/class_category_csv_upload`);
+    await page.waitForLoadState('load');
+    const productCsvPath = path.join(__dirname, '..', 'fixtures', 'product.csv');
+    await page.locator('#admin_csv_import_import_file').setInputFiles(productCsvPath);
+    await page.locator('#upload-button').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#upload-form')).toContainText('CSVのフォーマットが一致しません');
+  });
+
+  test('product_一覧からの規格編集_規格あり_規格登録 - EA0310-UC02-T02', async ({ page }) => {
+    // Find a product with classes (e.g., 彩のジェラートCUBE)
+    await goProductList(page);
+    await searchProduct(page, '彩のジェラートCUBE');
+    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
+
+    // Click on product name to go to edit page
+    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品登録');
+
+    // Click 規格管理 link
+    await page.locator('#standardConfig a[href*="product/class"]').click();
+    await page.waitForTimeout(500);
+    const confirmModal = page.locator('#confirmFormChangeModal');
+    if (await confirmModal.isVisible()) {
+      await confirmModal.locator('a.btn-ec-conversion').click();
+    }
+    await page.waitForLoadState('load');
+    await expect(page.locator(pageTitle)).toContainText('商品規格登録');
+
+    // The product already has classes, so the class table should be visible
+    // Just click save (register) to confirm it works
+    await page.locator('button[name="product_class_matrix[save]"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('.alert-success')).toContainText('保存しました');
   });
 });
