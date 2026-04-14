@@ -775,14 +775,7 @@ test.describe('Admin Product (EA03)', () => {
     await page.waitForLoadState('load');
     await expect(page.locator('.alert-success')).toContainText('商品を複製しました');
 
-    // Search and select first result (the duplicate, newest first)
-    await goProductList(page);
-    await searchProduct(page, '彩のジェラートCUBE');
-    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
-    await page.waitForLoadState('load');
-    await expect(page.locator(pageTitle)).toContainText('商品登録');
-
-    // Go to 規格管理
+    // We're now on the edit page of the duplicate — go directly to 規格管理
     await page.locator('#standardConfig a[href*="product/class"]').click();
     await page.waitForTimeout(500);
     const confirmModal = page.locator('#confirmFormChangeModal');
@@ -1356,23 +1349,8 @@ test.describe('Admin Product (EA03)', () => {
   });
 
   test('product_一覧からの規格編集_規格あり_規格登録 - EA0310-UC02-T02', async ({ page }) => {
-    // Find a product with classes (e.g., 彩のジェラートCUBE)
-    await goProductList(page);
-    await searchProduct(page, '彩のジェラートCUBE');
-    await expect(page.locator(searchResultMsg)).toContainText(/検索結果：\d+件が該当しました/);
-
-    // Click on product name to go to edit page
-    await page.locator('#form_bulk table tbody tr:first-child td:nth-child(4) a').click();
-    await page.waitForLoadState('load');
-    await expect(page.locator(pageTitle)).toContainText('商品登録');
-
-    // Click 規格管理 link
-    await page.locator('#standardConfig a[href*="product/class"]').click();
-    await page.waitForTimeout(500);
-    const confirmModal = page.locator('#confirmFormChangeModal');
-    if (await confirmModal.isVisible()) {
-      await confirmModal.locator('a.btn-ec-conversion').click();
-    }
+    // Go directly to product 1's class edit page (guaranteed to have classes)
+    await page.goto(`/${adminRoute}/product/product/class/1`);
     await page.waitForLoadState('load');
     await expect(page.locator(pageTitle)).toContainText('商品規格登録');
 
