@@ -364,7 +364,8 @@ test.describe('Front Product (EF02)', () => {
     await page.waitForLoadState('load');
 
     // "カートに入れる" button should be disabled and show out of stock message
-    await expect(page.locator('#form1 button[type="submit"]')).toContainText('ただいま品切れ中です');
+    // Out-of-stock button uses type="button" with disabled attribute, not type="submit"
+    await expect(page.locator('#form1 .ec-productRole__btn button')).toContainText('ただいま品切れ中です');
 
     // Restore stock
     await page.goto(`/${adminRoute}/product/product/2/edit`);

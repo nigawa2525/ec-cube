@@ -33,7 +33,7 @@ $faker = Faker::create('ja_JP');
 
 // 設定
 $customerNum = (int) (getenv('FIXTURE_CUSTOMER_NUM') ?: 5);
-$productNum = (int) (getenv('FIXTURE_PRODUCT_NUM') ?: 3);
+$productNum = (int) (getenv('FIXTURE_PRODUCT_NUM') ?: 23);
 $orderNum = (int) (getenv('FIXTURE_ORDER_NUM') ?: 10);
 
 echo "Creating test fixtures...\n";

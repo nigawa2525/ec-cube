@@ -399,7 +399,7 @@ test.describe('Admin System Info (EA08)', () => {
       await page.goto(`/${adminRoute}/setting/system/masterdata`);
       await page.waitForLoadState('load');
       await page.locator('#admin_system_masterdata_masterdata').selectOption('mtb_sex');
-      await page.locator('#form1 button.btn-ec-conversion').click();
+      await page.locator('#form1 button.btn-primary').click();
       await page.waitForLoadState('load');
     }
 

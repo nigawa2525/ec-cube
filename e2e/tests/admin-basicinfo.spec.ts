@@ -22,6 +22,11 @@ test.describe('Admin Basic Info (EA07)', () => {
   test('basicinfo_shop_settings - EA0701-UC01-T01', async ({ page }) => {
     await page.goto(`/${adminRoute}/setting/shop`);
     await page.waitForLoadState('load');
+    await ensureAdminLoggedIn(page);
+    if (!page.url().includes('/setting/shop')) {
+      await page.goto(`/${adminRoute}/setting/shop`);
+      await page.waitForLoadState('load');
+    }
     await expect(page.locator('.c-pageTitle')).toContainText('基本設定');
 
     await page.locator('#shop_master_company_name').fill('サンプル会社名');
@@ -841,7 +846,7 @@ test.describe('Admin Basic Info (EA07)', () => {
       await orderLink.click();
       await frontPage.waitForLoadState('load');
       // 'ご注文状況' should NOT be visible
-      const bodyText = await frontPage.locator('.ec-historyRole').textContent() || '';
+      const bodyText = await frontPage.locator('.ec-orderRole').textContent() || '';
       expect(bodyText).not.toContain('ご注文状況');
     }
 
@@ -883,7 +888,7 @@ test.describe('Admin Basic Info (EA07)', () => {
     if (await orderLink2.count() > 0) {
       await orderLink2.click();
       await frontPage2.waitForLoadState('load');
-      await expect(frontPage2.locator('.ec-historyRole')).toContainText('ご注文状況');
+      await expect(frontPage2.locator('.ec-orderRole')).toContainText('ご注文状況');
     }
 
     await frontContext2.close();
